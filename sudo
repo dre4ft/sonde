@@ -1,0 +1,1 @@
+sonde_user ALL=(ALL) NOPASSWD: /home/etu/sonde/sonde/bin/python3 /home/sonde_user/sonde/scan.py vi

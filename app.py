@@ -18,7 +18,7 @@ def index():
 @app.route("/scan")
 def scan():
     try:
-        subprocess.run(["sudo", "/home/etu/venv-sonde/bin/python3", "/home/etu/scan.py"], check=True)
+        subprocess.run(["sudo", "python3", "scan.py"], check=True)
         flash("✅ Scan terminé avec succès.", "success")
     except subprocess.CalledProcessError as e:
         flash(f"❌ Erreur lors du scan : {e}", "danger")
