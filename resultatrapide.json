@@ -1,0 +1,22 @@
+[
+    {
+        "ip": "192.168.1.1",
+        "os": "Unknown",
+        "hostname": "livebox.home"
+    },
+    {
+        "ip": "192.168.1.10",
+        "os": "Unknown",
+        "hostname": ""
+    },
+    {
+        "ip": "192.168.1.18",
+        "os": "Unknown",
+        "hostname": "msiportablegaetan.home"
+    },
+    {
+        "ip": "192.168.1.42",
+        "os": "Unknown",
+        "hostname": "sonde.home"
+    }
+]

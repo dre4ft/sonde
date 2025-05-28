@@ -1,0 +1,42 @@
+[
+    {
+        "ip": "192.168.1.1",
+        "os": "Linux 2.6.32",
+        "ports": [
+            53,
+            80,
+            113,
+            443
+        ],
+        "role": "Service"
+    },
+    {
+        "ip": "192.168.1.10",
+        "os": "OpenWrt Kamikaze 7.09 (Linux 2.6.22)",
+        "ports": [
+            80,
+            443,
+            8080
+        ],
+        "role": "Service"
+    },
+    {
+        "ip": "192.168.1.18",
+        "os": "Microsoft Windows 10",
+        "ports": [
+            135,
+            139,
+            445
+        ],
+        "role": "Endpoint"
+    },
+    {
+        "ip": "192.168.1.42",
+        "os": "Linux 2.6.32",
+        "ports": [
+            22,
+            5000
+        ],
+        "role": "Endpoint"
+    }
+]

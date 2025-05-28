@@ -1,0 +1,4 @@
+venv-sonde/
+__pycache__/
+*.pyc
+*.log

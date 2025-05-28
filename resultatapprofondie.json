@@ -1,0 +1,62 @@
+[
+    {
+        "ip": "192.168.1.1",
+        "os": "Linux 2.6.32",
+        "ports": [
+            53,
+            80,
+            113,
+            443
+        ],
+        "role": "Service",
+        "services": [
+            "53/domain dnsmasq gen_2.86_v1.2.3",
+            "80/http",
+            "113/ident",
+            "443/https"
+        ]
+    },
+    {
+        "ip": "192.168.1.10",
+        "os": "OpenWrt Kamikaze 7.09 (Linux 2.6.22)",
+        "ports": [
+            80,
+            443,
+            8080
+        ],
+        "role": "Service",
+        "services": [
+            "80/http nginx",
+            "443/http nginx",
+            "8080/http Web-Based Enterprise Management CIM serverOpenPegasus WBEM httpd"
+        ]
+    },
+    {
+        "ip": "192.168.1.18",
+        "os": "Microsoft Windows 10",
+        "ports": [
+            135,
+            139,
+            445
+        ],
+        "role": "Endpoint",
+        "services": [
+            "135/msrpc Microsoft Windows RPC",
+            "139/netbios-ssn Microsoft Windows netbios-ssn",
+            "445/microsoft-ds"
+        ]
+    },
+    {
+        "ip": "192.168.1.42",
+        "os": "Linux 2.6.32",
+        "ports": [
+            22,
+            5000
+        ],
+        "role": "Endpoint",
+        "services": [
+            "22/ssh OpenSSH 9.2p1 Debian 2+deb12u5",
+            "5000/upnp"
+        ]
+    }
+]
