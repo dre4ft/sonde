@@ -1,10 +1,23 @@
-venv-sonde/
-zeek/
+# Environnements virtuels
+venv*/
+.venv*/
+
+# Données de scan local
+*.json
+lastscan.txt
+
+# Fichiers temporaires Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.log
-zeek/
-venv-sonde/
-*.log
-__pycache__/
+
+# IDE
+.vscode/
 .vscode-server/
+
+# Zeek
+zeek/
+
+# Autres
+.DS_Store
+*.swp
