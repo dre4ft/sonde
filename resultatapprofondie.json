@@ -2,6 +2,7 @@
     {
         "ip": "192.168.1.1",
         "os": "Linux 2.6.32",
+        "hostname": "livebox.home",
         "ports": [
             53,
             80,
@@ -10,7 +11,7 @@
         ],
         "role": "Service",
         "services": [
-            "53/domain dnsmasq gen_2.86_v1.2.3",
+            "53/domain",
             "80/http",
             "113/ident",
             "443/https"
@@ -18,7 +19,8 @@
     },
     {
         "ip": "192.168.1.10",
-        "os": "OpenWrt Kamikaze 7.09 (Linux 2.6.22)",
+        "os": "OpenWrt 0.9 - 7.09 (Linux 2.4.30 - 2.4.34)",
+        "hostname": "",
         "ports": [
             80,
             443,
@@ -32,8 +34,29 @@
         ]
     },
     {
+        "ip": "192.168.1.12",
+        "os": "Linux 4.15 - 5.6",
+        "hostname": "samsung.home",
+        "ports": [
+            7000,
+            8001,
+            8002,
+            8080,
+            9999
+        ],
+        "role": "Service",
+        "services": [
+            "7000/rtsp AirTunes rtspd 377.40.00",
+            "8001/vcom-tunnel",
+            "8002/teradataordbms",
+            "8080/http-proxy WebServer",
+            "9999/abyss"
+        ]
+    },
+    {
         "ip": "192.168.1.18",
         "os": "Microsoft Windows 10",
+        "hostname": "msiportablegaetan.home",
         "ports": [
             135,
             139,
@@ -49,13 +72,14 @@
     {
         "ip": "192.168.1.42",
         "os": "Linux 2.6.32",
+        "hostname": "sonde.home",
         "ports": [
             22,
             5000
         ],
         "role": "Endpoint",
         "services": [
-            "22/ssh OpenSSH 9.2p1 Debian 2+deb12u5",
+            "22/ssh OpenSSH 9.2p1 Debian 2+deb12u6",
             "5000/upnp"
         ]
     }

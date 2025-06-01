@@ -58,5 +58,15 @@ def scan():
 
     return redirect(url_for('index'))
 
+@app.route("/map")
+def map_view():
+    try:
+        with open("results.json") as f:
+            data = json.load(f)
+    except Exception:
+        data = []
+
+    return render_template("map.html", data=data)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

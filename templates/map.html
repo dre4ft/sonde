@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Cartographie du réseau</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        #network {
+            width: 100%;
+            height: 600px;
+            border: 1px solid lightgray;
+        }
+    </style>
+</head>
+<body class="container">
+    <h1>Cartographie du réseau</h1>
+    <div id="network"></div>
+
+    <script>
+        const nodes = new vis.DataSet([
+            { id: 0, label: "Sonde", color: "#4caf50" },
+            {% for host in data %}
+            {
+                id: {{ loop.index }},
+                label: "{{ host.ip }}\n({{ host.role or 'Inconnu' }})",
+                color: {
+                    background: 
+                    {% if host.role == 'Service' %}'#2196f3'
+                    {% elif host.role == 'Endpoint' %}'#ff9800'
+                    {% elif host.role == 'Maintenance' %}'#9c27b0'
+                    {% elif host.role == 'Surveillance' %}'#f44336'
+                    {% else %}'#9e9e9e'
+                    {% endif %}
+                }
+            },
+            {% endfor %}
+        ]);
+
+        const edges = new vis.DataSet([
+            {% for host in data %}
+            { from: 0, to: {{ loop.index }} },
+            {% endfor %}
+        ]);
+
+        const container = document.getElementById("network");
+        const networkData = { nodes: nodes, edges: edges };
+        const options = {
+            nodes: {
+                shape: "dot",
+                size: 20,
+                font: { size: 14, color: "#000" }
+            },
+            edges: {
+                arrows: "to"
+            },
+            physics: {
+                stabilization: false
+            }
+        };
+
+        new vis.Network(container, networkData, options);
+    </script>
+</body>
+</html>

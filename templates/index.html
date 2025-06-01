@@ -6,19 +6,23 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- DataTables CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
 
     <!-- jQuery & DataTables -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 
-    <script>
-        $(document).ready(function () {
-            $('#scanTable').DataTable();
-        });
-    </script>
+    <!-- vis-network -->
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+    <style>
+        #network {
+            width: 100%;
+            height: 600px;
+            border: 1px solid lightgray;
+            margin-top: 40px;
+        }
+    </style>
 </head>
 <body class="container mt-4">
 
@@ -37,7 +41,7 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Formulaire choix du scan -->
+    <!-- Formulaire -->
     <form method="POST" action="/scan" class="mb-4">
         <label for="scan_type">Type de scan :</label>
         <div class="row">
@@ -52,12 +56,20 @@
                 <input type="text" name="target_ip" class="form-control" placeholder="ex: 192.168.1.0/24" value="192.168.1.0/24">
             </div>
             <div class="col-md-3">
-                <button type="submit" class="btn btn-primary w-100">Lancer le scan</button>
+                <button id="scanBtn" type="submit" class="btn btn-primary w-100">Lancer le scan</button>
             </div>
         </div>
     </form>
 
-    <!-- Tableau dynamique -->
+    <!-- Spinner -->
+    <div id="spinner" class="text-center my-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Chargement...</span>
+        </div>
+        <p>Scan en cours, merci de patienter...</p>
+    </div>
+
+    <!-- Table -->
     <table id="scanTable" class="table table-bordered table-hover">
         <thead class="table-dark">
             <tr>
@@ -90,6 +102,63 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <!-- Cartographie -->
+    <h2 class="mt-5">Cartographie du réseau</h2>
+    <div id="network"></div>
+
+    <script>
+        document.getElementById('scanBtn').addEventListener('click', function () {
+            document.getElementById('spinner').style.display = 'block';
+        });
+
+        const nodes = new vis.DataSet([
+            {
+                id: 0,
+                label: "Sonde",
+                shape: "image",
+                image: "{{ url_for('static', filename='icons/sonde.png') }}"
+            },
+            {% for host in data %}
+            {
+                id: {{ loop.index }},
+                label: "{{ host.ip }}",
+                shape: "image",
+                image: 
+                    {% if host.role == 'Service' %}"{{ url_for('static', filename='icons/server.png') }}"
+                    {% elif host.role == 'Endpoint' %}"{{ url_for('static', filename='icons/laptop.png') }}"
+                    {% elif host.role == 'Maintenance' %}"{{ url_for('static', filename='icons/printer.png') }}"
+                    {% elif host.role == 'Surveillance' %}"{{ url_for('static', filename='icons/camera.png') }}"
+                    {% else %}"{{ url_for('static', filename='icons/unknown.png') }}"
+                    {% endif %}
+            },
+            {% endfor %}
+        ]);
+
+        const edges = new vis.DataSet([
+            {% for host in data %}
+            { from: 0, to: {{ loop.index }} },
+            {% endfor %}
+        ]);
+
+        const container = document.getElementById("network");
+        const networkData = { nodes: nodes, edges: edges };
+        const options = {
+            nodes: {
+                shape: "dot",
+                size: 20,
+                font: { size: 14, color: "#000" }
+            },
+            edges: {
+                arrows: "to"
+            },
+            physics: {
+                stabilization: false
+            }
+        };
+
+        new vis.Network(container, networkData, options);
+    </script>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

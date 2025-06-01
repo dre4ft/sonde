@@ -1,4 +1,5 @@
 venv-sonde/
+zeek/
 __pycache__/
 *.pyc
 *.log
