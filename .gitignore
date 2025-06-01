@@ -3,3 +3,8 @@ zeek/
 __pycache__/
 *.pyc
 *.log
+zeek/
+venv-sonde/
+*.log
+__pycache__/
+.vscode-server/

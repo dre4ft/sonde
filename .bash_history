@@ -71,3 +71,22 @@ sudo nano scan.py
 sudo /home/etu/venv-sonde/bin/python3 scan.py standard
 cat resultatmoyen.json 
 cd templates/
+git checkout -b Sonde_gaetan
+git add .
+git checkout Sonde_gaetan
+git commit -m "🔄 Mise à jour complète : interface, scans multi-niveaux, cartographie réseau visuelle"
+git push origin Sonde_gaetan
+git status
+echo "zeek/" >> .gitignore
+echo "venv-sonde/" >> .gitignore
+echo "*.log" >> .gitignore
+echo "__pycache__/" >> .gitignore
+git rm -r --cached zeek/ venv-sonde/
+echo ".vscode-server/" >> .gitignore
+git rm -r --cached .vscode-server/
+git add app.py scan.py lastscan.txt requirements.txt README.md
+git add templates/
+git add static/icons/
+source venv-sonde/bin/activate  # Active ton environnement virtuel
+pip freeze > requirements.txt
+exit
