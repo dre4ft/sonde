@@ -1,5 +1,6 @@
-nmap
+python-nmap
 json
 os
 sys
 flask
+vulners
