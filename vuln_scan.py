@@ -44,7 +44,8 @@ def search_cve(product, version):
         for r in results:
             if "cvelist" in r:
                 cves += r["cvelist"]
-        return list(set(cves))
+        sorted_cves = sort_cves_by_year(cves)  
+        return list(set(sorted_cves))
     except Exception as e:
         print("⚠️ Erreur recherche CVE:", e)
         return []
@@ -56,6 +57,16 @@ def full_scan(target):
         version = service['version']
         service['cves'] = search_cve(product, version)
     return ports  # <-- IMPORTANT : retourne les résultats scannés
+
+def sort_cves_by_year(cves):
+    def extract_year(cve_code):
+        try:
+            # Exemple: "CVE-2023-1111" -> 2023
+            return int(cve_code.split('-')[1])
+        except (IndexError, ValueError):
+            return 0  # Si format inattendu, on met 0 pour trier en début
+
+    return sorted(cves, key=extract_year)
 
 if __name__ == "__main__":
     
