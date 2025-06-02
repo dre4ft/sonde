@@ -2,6 +2,8 @@ import nmap
 import json
 import os
 import sys
+from BD.db import save_scan_entry
+
 
 def get_nmap_args(scan_type):
     if scan_type == "quick":
@@ -31,6 +33,7 @@ def categorize(ports, osname):
         return "Endpoint"
 
 def main():
+    results = []
     if os.geteuid() != 0:
         print("[❌] Ce script doit être exécuté avec sudo.")
         sys.exit(1)
@@ -48,7 +51,7 @@ def main():
     print(f"[🔍] Scan {scan_type} lancé sur {target}...")
 
     try:
-        # Étape 1 : scan ping pour détecter les hôtes actifs
+        # Étape 1 : scan ping
         ping_scan = nmap.PortScanner()
         ping_scan.scan(hosts=target, arguments="-sn")
         live_hosts = ping_scan.all_hosts()
@@ -59,7 +62,7 @@ def main():
 
         print(f"[📡] Hôtes actifs détectés : {', '.join(live_hosts)}")
 
-        # Étape 2 : scan ciblé sur les hôtes actifs avec les arguments du scan sélectionné
+        # Étape 2 : scan ciblé
         scanner = nmap.PortScanner()
         scanner.scan(hosts=" ".join(live_hosts), arguments=arguments)
 
@@ -67,7 +70,7 @@ def main():
         print(f"[❌] Erreur lors du scan : {e}")
         sys.exit(1)
 
-    results = []
+
 
     for host in scanner.all_hosts():
         result = {
@@ -75,7 +78,7 @@ def main():
             "os": "Unknown"
         }
 
-        # Résolution DNS
+        # DNS
         hostnames = scanner[host].get('hostnames', [])
         if hostnames:
             result["hostname"] = hostnames[0].get('name', '')
@@ -107,13 +110,20 @@ def main():
 
         results.append(result)
 
+    # Sauvegarde JSON
     with open(output_file, "w") as f:
         json.dump(results, f, indent=4)
 
     with open("lastscan.txt", "w") as f:
         f.write(output_file)
 
-    print(f"[✅] Scan terminé. Résultats enregistrés dans {output_file}")
+    # Enregistrement dans la base de données
+    try:
+        save_scan_entry(scan_type, results)
+    except Exception as e:
+        print(f"[⚠️] Erreur lors de l'enregistrement en base : {e}")
+
+    print(f"[✅] Scan terminé. Résultats enregistrés dans {output_file} et la base de données.")
 
 if __name__ == "__main__":
     main()
