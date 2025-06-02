@@ -2,6 +2,8 @@ import nmap
 import json
 from vulners import Vulners
 import os
+import argparse
+from datetime import datetime
 
 api_key = os.environ.get("VULNERS_API_KEY")
 
@@ -56,22 +58,31 @@ def full_scan(target):
     return ports  # <-- IMPORTANT : retourne les résultats scannés
 
 if __name__ == "__main__":
-    import argparse
+    
 
     parser = argparse.ArgumentParser(description="Scanner de vulnérabilités simple (OpenVAS-like)")
     parser.add_argument("target", help="IP ou nom d'hôte à scanner")
-    parser.add_argument("-o", "--output", help="Fichier de sortie JSON", default="resultats.json")
 
     args = parser.parse_args()
     result = full_scan(args.target)
 
-    # Debug pour vérifier la structure de result
+    # Crée le dossier export s'il n'existe pas
+    export_dir = "export"
+    os.makedirs(export_dir, exist_ok=True)
+
+    # Génère le nom de fichier
+    now = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"scan-{args.target}-{now}.json"
+    filepath = os.path.join(export_dir, filename)
+
+    # Debug
     if result is None:
         print("⚠️ Warning: result is None, forced to empty list")
         result = []
-    print(f"DEBUG: result contains {len(result)} entries")
+    print(f"DEBUG: result contient {len(result)} entrées")
 
-    with open(args.output, "w") as f:
+    # Sauvegarde JSON
+    with open(filepath, "w") as f:
         json.dump(result, f, indent=2)
 
-    print(f"\n✅ Scan terminé. Résultats sauvegardés dans {args.output}")
+    print(f"\n✅ Scan terminé. Résultats sauvegardés dans {filepath}")
