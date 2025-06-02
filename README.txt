@@ -1,112 +1,99 @@
-🚀 Sonde d’Audit Réseau
-=======================
+# 📡 Sonde d'Audit Réseau - Projet Python/Flask/Nmap/SQLite
 
-Ce projet propose une sonde réseau légère, déployable sur un Raspberry Pi,
-permettant de scanner un réseau local, identifier les machines, les classifier 
-par rôle, et visualiser les résultats via une interface web intuitive.
+Ce projet transforme un Raspberry Pi en **sonde d’audit réseau** capable de :
 
----
-
-🌟 Fonctionnalités principales
-------------------------------
-✅ Scan rapide, standard ou approfondi avec Nmap  
-✅ Classification automatique : Service, Endpoint, Maintenance, Surveillance  
-✅ IHM responsive (Flask + Bootstrap + DataTables)  
-✅ Cartographie graphique avec Vis.js  
-✅ Icônes personnalisées pour représenter les équipements  
+- 🔍 Scanner un réseau local avec Nmap (rapide, standard, approfondi)
+- 🧠 Classer automatiquement les machines selon leur rôle (poste, imprimante, caméra…)
+- 🧾 Sauvegarder les résultats dans :
+  - un fichier `.json`
+  - une base **SQLite** persistante (`scans.db`)
+- 🌐 Offrir une interface web Flask :
+  - pour visualiser le **dernier scan**
+  - pour accéder à **l’historique complet** avec détails
 
 ---
 
-🔧 Types de scan
-----------------
-| Type      | Informations collectées                                       | Fichier de sortie           |
-|-----------|---------------------------------------------------------------|-----------------------------|
-| quick     | IP, nom NetBIOS, nom DNS                                      | resultatrapide.json         |
-| standard  | IP, OS, ports TCP, rôle, nom DNS                              | resultatmoyen.json          |
-| deep      | IP, OS, ports, rôle, services + versions, vulnérabilités, DNS | resultatapprofondie.json    |
+## ⚙️ Structure Technique
 
-💡 Remarque : le *scan rapide* ne permet pas d’identifier le rôle d’un équipement.  
-Aucune icône spécifique ne s’affichera dans la cartographie pour ces hôtes.
+### 🗺️ `scan.py` – Script de scan
+
+1. Vérifie les droits `sudo`
+2. Ping scan pour détecter les hôtes
+3. Scan ciblé via Nmap :
+   - `--script nbstat` → rapide
+   - `-O -T4` → standard
+   - `-A -T4` → approfondi
+4. Résolution DNS et NetBIOS
+5. Détection de ports, OS, services
+6. Catégorisation du rôle de l'hôte
+7. Sauvegarde dans :
+   - Fichier JSON
+   - Base SQLite
+
+### 🗃️ `BD/db.py` – Base de données SQLite
+
+- Utilise **SQLAlchemy**
+- Stocke chaque hôte scanné avec :
+  - IP, OS, ports, hostname, rôle, services…
+- Permet l’historique, les statistiques, les analyses comparatives
+
+### 🌐 `app.py` – Application Flask
+
+- Interface web accessible sur : `http://[IP-RPi]:5000`
+- Routes disponibles :
+  - `/` → affichage du dernier scan
+  - `/scan` → exécution manuelle d’un scan
+  - `/historique` → visualisation de tous les scans (via DB)
 
 ---
 
-📋 Structure du projet
-----------------------
+## 🧾 Fichiers générés
+
+- `resultatrapide.json`, `resultatmoyen.json`, `resultatapprofondie.json`
+- `lastscan.txt` → contient le nom du dernier scan consulté
+- `scans.db` → base SQLite persistante même en cas de redémarrage
+
+---
+
+## 🧠 Fonctionnalités
+
+| Fonction                            | Description |
+|-------------------------------------|-------------|
+| 🔎 Scan réseau avec Nmap            | Ping + ports + OS + services |
+| 🧠 Catégorisation automatique       | Rôle des hôtes selon heuristique |
+| 🗃️ Historique des scans en SQLite | Via SQLAlchemy |
+| 🌐 Interface web Flask              | Visualisation + interaction |
+| 💾 Persistance JSON + DB           | Pour traitement ou export |
+| 📊 Préparation à une cartographie  | Intégration future avec `vis-network.js` |
+
+---
+
+## ▶️ Lancer l’application
+
+sudo ~/venv-sonde/bin/python3 app.py
+
+📂 Structure du projet
 .
-├── app.py                    → Serveur Flask
-├── scan.py                   → Script de scan et d’analyse
-├── lastscan.txt              → Mémo du dernier scan
-├── resultatrapide.json       → Résultat du scan rapide
-├── resultatmoyen.json        → Résultat du scan standard
-├── resultatapprofondie.json  → Résultat du scan approfondi
-├── results.json              → Exemple de résultat
-├── requirements.txt          → Modules Python requis
-
+├── scan.py                  # Scanner réseau
+├── app.py                   # Interface web
+├── BD/
+│   └── db.py                # Base de données
+├── templates/
+│   ├── index.html
+│   └── historique.html
 ├── static/
 │   └── icons/
-│       ├── camera.png        → Icône caméra (Surveillance)
-│       ├── laptop.png        → Icône laptop (Endpoint)
-│       ├── printer.png       → Icône imprimante (Maintenance)
-│       ├── server.png        → Icône serveur (Service)
-│       └── unknown.png       → Icône générique si type non identifié
+├── resultatrapide.json      # Résultat scan rapide
+├── resultatmoyen.json       # Résultat scan standard
+├── resultatapprofondie.json # Résultat scan approfondi
+├── lastscan.txt             # Nom du dernier fichier
+└── scans.db                 # Base SQLite
 
-├── templates/
-│   ├── index.html            → Interface principale avec formulaire et cartographie
-│   └── map.html              → Version isolée de la cartographie
+Évolutions possibles
+Cartographie dynamique avec vis-network.js
+Export CSV/PDF des scans
+Statistiques détaillées (types d’OS, ports exposés, etc.)
+Détection de changement entre scans
+Interface web sécurisée avec login
+Notification email
 
----
-
-🚧 Prérequis
-------------
-- Python 3.10 ou +
-- Nmap (sudo apt install nmap)
-- Droits sudo pour les scans
-
----
-
-🚀 Installation & Lancement
----------------------------
-# Initialisation
-python3 -m venv venv-sonde
-source venv-sonde/bin/activate
-pip install -r requirements.txt
-
-# Scan manuel
-sudo venv-sonde/bin/python3 scan.py standard 192.168.1.0/24
-
-# Lancement du serveur Flask
-venv-sonde/bin/python3 app.py
-
-Puis ouvrir dans un navigateur :
-http://<ip_du_raspberry>:5000
-
----
-
-📊 Interface Web
-----------------
-- Tableau filtrable & triable
-- Lancement de scans via IHM
-- Cartographie dynamique
-- Légende avec icônes : laptop, serveur, imprimante, caméra, etc.
-
----
-
-🌎 Cartographie dynamique (Vis.js)
-----------------------------------
-- Chaque hôte relié à la sonde
-- Icône selon le rôle détecté
-- Label = IP de l’hôte
-- Rôle inconnu ⇒ icône générique ou non affichée
-
-📎 Astuce : ajouter une icône générique manuellement
-cp static/icons/laptop.png static/icons/unknown.png
-
----
-
-📈 Améliorations prévues
-------------------------
-- [ ] Export PDF / CSV
-- [ ] Historique avec base de données
-- [ ] Détection de services critiques
-- [ ] Graphiques d’évolution
-- [ ] Intégration passive avec Zeek (en cours)
