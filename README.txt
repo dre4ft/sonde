@@ -89,6 +89,28 @@ sudo ~/venv-sonde/bin/python3 app.py
 ├── lastscan.txt             # Nom du dernier fichier
 └── scans.db                 # Base SQLite
 
+
+ Configuration de la clé API Vulners
+Pour activer la détection de vulnérabilités (CVEs), vous devez définir la clé API de Vulners via une variable d’environnement nommée VULNERS_API_KEY.
+
+Exemple (dans le terminal ou le fichier ~/.bashrc) :
+bash
+Copier
+Modifier
+export VULNERS_API_KEY="votre_clé_api"
+Option recommandée (dans le venv) :
+Ajoutez cette ligne à la fin du fichier venv-sonde/bin/activate :
+
+bash
+Copier
+Modifier
+export VULNERS_API_KEY="votre_clé_api"
+Cela garantit que la clé est chargée automatiquement à chaque activation de l’environnement virtuel.
+
+
+
+
+
 Évolutions possibles
 Cartographie dynamique avec vis-network.js
 Export CSV/PDF des scans
