@@ -1,23 +1,36 @@
-# Environnements virtuels
-venv*/
-.venv*/
+# Virtualenv
+venv-sonde/
+__pycache__/
+*.pyc
+*.log
 
-# Données de scan local
+# Résultats de scan
 *.json
 lastscan.txt
 
-# Fichiers temporaires Python
-__pycache__/
-*.py[cod]
-*.log
-
-# IDE
-.vscode/
+# Zeek / config inutiles
+zeek/
+zeek-local/
+zeek-install/
+.cache/
 .vscode-server/
 
-# Zeek
-zeek/
 
-# Autres
-.DS_Store
-*.swp
+# Fichiers de résultats de scan
+lastscan.txt
+resultatrapide.json
+resultatmoyen.json
+resultatapprofondie.json
+results.json
+
+# Base de données
+scans1.db
+
+# Environnement virtuel Python
+venv-sonde/
+
+# Script de scan passif (optionnel si tu veux l’exclure)
+passive_scan.py
+
+# Dossier static (si généré dynamiquement ou inutile à versionner)
+static/
