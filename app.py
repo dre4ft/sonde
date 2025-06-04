@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, url_for, flash, request
 import json, os, subprocess
-from BD.db import init_db, Session, Scan
-
+from BD.db import init_db, Session, Scan, Service
+from sqlalchemy.orm import joinedload
 app = Flask(__name__)
 app.secret_key = 'cle-ultra-secrete'
 
@@ -28,6 +28,7 @@ def index():
     has_services = any("services" in h for h in data)
     has_hostname = any("hostname" in h for h in data)
     has_netbios = any("netbios" in h for h in data)
+    has_cves = any("cves" in h for h in data)
 
     return render_template("index.html", data=data,
                            has_ports=has_ports,
@@ -35,23 +36,38 @@ def index():
                            has_services=has_services,
                            has_hostname=has_hostname,
                            has_netbios=has_netbios,
+                           has_cves=has_cves,
                            filename=filename)
 
 @app.route("/scan", methods=["POST"])
 def scan():
     scan_type = request.form.get("scan_type", "standard")
     target_ip = request.form.get("target_ip", "192.168.1.0/24")
+    include_sv = request.form.get("sv") == "on"
+
+    # Clé API Vulners à transmettre
+    vulners_key = os.environ.get("VULNERS_API_KEY", "")
+
+    # Commande avec injection explicite via `env`
+    cmd = [
+        "sudo",
+        "env", f"VULNERS_API_KEY={vulners_key}",
+        "/home/etu/venv-sonde/bin/python3",
+        "/home/etu/scan.py",
+        scan_type,
+        target_ip
+    ]
+
+    if include_sv:
+        # On insère "-v" tout de suite après "/home/etu/scan.py"
+        cmd.insert(5, "-v")
+
     try:
-        subprocess.run([
-            "sudo",
-            "/home/etu/venv-sonde/bin/python3",
-            "/home/etu/scan.py",
-            scan_type,
-            target_ip
-        ], check=True)
+        subprocess.run(cmd, check=True)
         flash(f"✅ Scan '{scan_type}' sur {target_ip} terminé avec succès.", "success")
     except subprocess.CalledProcessError as e:
         flash(f"❌ Erreur lors du scan : {e}", "danger")
+
     return redirect(url_for('index'))
 
 @app.route("/map")
@@ -66,10 +82,10 @@ def map_view():
 @app.route("/historique")
 def historique():
     session = Session()
-    entries = session.query(Scan).order_by(Scan.timestamp.desc()).all()
+    entries = session.query(Scan).options(joinedload(Scan.services_rel)).order_by(Scan.timestamp.desc()).all()
     return render_template("historique.html", entries=entries)
 
 # === LANCEMENT ===
 if __name__ == "__main__":
-    init_db()  # assure que la base est bien initialisée
+    init_db()
     app.run(host="0.0.0.0", port=5000)
