@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+import re
 import nmap
 import json
 import os
@@ -9,6 +11,29 @@ from BD.db import save_scan_entry
 
 # On récupère la clé API Vulners dans la variable d'environnement
 api_key = os.environ.get("VULNERS_API_KEY")
+
+
+def normalize_version(version: str) -> str:
+    """
+    Extrait la première séquence de chiffres du type "x.y" ou "x.y.z..."
+    dans la chaîne `version`. Si rien trouvé, renvoie la chaîne initiale.
+    Exemples :
+      "gen_2.86_v1.2.3"       → "2.86"
+      "9.2p1 Debian 2+deb12u6" → "9.2.1" (si on veut extraire x.y.z)
+      "1.0.2"                  → "1.0.2"
+      ""                       → ""
+    """
+    # On cherche d'abord un motif "x.y.z" (au moins deux points)
+    m = re.search(r"(\d+\.\d+\.\d+)", version)
+    if m:
+        return m.group(1)
+
+    # Sinon, on cherche un motif "x.y"
+    m = re.search(r"(\d+\.\d+)", version)
+    if m:
+        return m.group(1)
+
+    return version.strip()
 
 
 def get_nmap_args(scan_type, vuln):
@@ -63,8 +88,10 @@ def sort_cves_by_year(cves):
 
 def search_cve(product, version):
     """
-    Interroge l'API Vulners pour le couple (product, version).
+    Interroge l'API Vulners pour le couple (product, version_norm).
     Si pas de clé API ou erreur, renvoie [].
+
+    On normalise d'abord `version` avec normalize_version().
     """
     if not product or not version:
         return []
@@ -73,13 +100,16 @@ def search_cve(product, version):
         print("⚠️ VULNERS_API_KEY non définie, on passe la recherche de CVE.")
         return []
 
+    # Normalisation de la version
+    version_norm = normalize_version(version)
+    query = f"{product} {version_norm}".strip()
+
     try:
         vulners_api = vulners.Vulners(api_key)
     except Exception as e:
         print(f"⚠️ Erreur initialisation Vulners API : {e}")
         return []
 
-    query = f"{product} {version}"
     print(f"🔎 Recherche de vulnérabilités pour « {query} » …")
     try:
         results = vulners_api.search(query)
@@ -176,7 +206,7 @@ def main():
                 product = port_data.get("product", "")
                 version = port_data.get("version", "")
 
-                # Si on a demandé la recherche de vulnérabilités, on lève la liste de CVEs
+                # Si on a demandé la recherche de vulnérabilités, on interroge Vulners
                 if args.vuln:
                     cves = search_cve(product, version)
                 else:
