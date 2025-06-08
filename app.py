@@ -3,8 +3,9 @@ import json, os, subprocess
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from datetime import datetime
+from collections import Counter
 
-from BD.db import init_db, Session, Scan
+from BD.db import init_db, Session, Scan, Service
 
 app = Flask(__name__)
 app.secret_key = 'cle-ultra-secrete'
@@ -12,11 +13,10 @@ app.secret_key = 'cle-ultra-secrete'
 
 @app.route("/")
 def index():
-    # 1) Charge le JSON du dernier scan
     default_file = "resultatmoyen.json"
     filename = default_file
     if os.path.exists("lastscan.txt"):
-        with open("lastscan.txt", "r") as f:
+        with open("lastscan.txt", "r", encoding="utf-8") as f:
             filename = f.read().strip()
 
     data = []
@@ -26,7 +26,6 @@ def index():
         except json.JSONDecodeError:
             flash(f"⚠️ Le fichier {filename} est vide ou corrompu.", "warning")
 
-    # 2) Récupère les timestamps distincts depuis la BD
     session = Session()
     rows = (
         session.query(
@@ -39,7 +38,6 @@ def index():
     session.close()
     history = [r.ts for r in rows]
 
-    # 3) Flags d'affichage pour le template
     has_ports    = any("ports"    in h for h in data)
     has_role     = any("role"     in h for h in data)
     has_services = any("services" in h for h in data)
@@ -72,7 +70,6 @@ def show_scan():
         flash("⚠️ Aucun scan sélectionné.", "warning")
         return redirect(url_for("index"))
 
-    # Valide le format
     try:
         datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
     except ValueError:
@@ -80,7 +77,6 @@ def show_scan():
         return redirect(url_for("index"))
 
     session = Session()
-    # Reboucle l'historique
     rows = (
         session.query(
             func.strftime('%Y-%m-%d %H:%M:%S', Scan.timestamp).label('ts')
@@ -91,7 +87,6 @@ def show_scan():
     )
     history = [r.ts for r in rows]
 
-    # Récupère tous les enregistrements de ce timestamp
     scans = (
         session.query(Scan)
                .options(joinedload(Scan.services_rel))
@@ -106,15 +101,18 @@ def show_scan():
         flash(f"⚠️ Aucun scan trouvé à la date {ts_str}.", "warning")
         return redirect(url_for("index"))
 
-    # Reconstruit la même structure `data` que dans index
     data = []
     for scan in scans:
+        # protège contre scan.ports None
+        ports_raw = scan.ports or ""
+        ports_list = [int(p) for p in ports_raw.split(",") if p.strip()]
+
         host = {
             "ip": scan.ip,
             "os": scan.os,
             "hostname": scan.hostname,
             "netbios": scan.netbios,
-            "ports": [int(p) for p in scan.ports.split(",") if p.strip()],
+            "ports": ports_list,
             "role": scan.role,
             "services": []
         }
@@ -124,7 +122,6 @@ def show_scan():
             host["services"].append({"info": info, "cves": cves})
         data.append(host)
 
-    # Flags d'affichage recalculés
     has_ports    = any(h.get("ports")    for h in data)
     has_role     = any(h.get("role")     for h in data)
     has_services = any(h.get("services") for h in data)
@@ -135,7 +132,7 @@ def show_scan():
     return render_template(
         "index.html",
         data=data,
-        filename=None,  # on vient de la BD, pas de fichier JSON
+        filename=None,  # provient de la BD, pas d'un fichier JSON
         history=history,
         has_ports=has_ports,
         has_role=has_role,
@@ -183,6 +180,37 @@ def historique():
     )
     session.close()
     return render_template("historique.html", entries=entries)
+
+
+@app.route("/vulns")
+def vulns():
+    session = Session()
+    # eager-load du scan associé
+    services = session.query(Service).options(joinedload(Service.scan)).all()
+    session.close()
+
+    counter = Counter()
+    hosts_map = {}
+    for svc in services:
+        ip = svc.scan.ip if svc.scan else None
+        for cve in (svc.cves.split(",") if svc.cves else []):
+            cve = cve.strip()
+            if not cve:
+                continue
+            counter[cve] += 1
+            hosts_map.setdefault(cve, set()).add(ip)
+
+    vulns_list = []
+    for cve, count in counter.most_common():
+        # filtre les IP None avant tri
+        clean_hosts = sorted(h for h in hosts_map[cve] if h)
+        vulns_list.append({
+            "cve": cve,
+            "count": count,
+            "hosts": clean_hosts
+        })
+
+    return render_template("vulns.html", vulns=vulns_list)
 
 
 if __name__ == "__main__":

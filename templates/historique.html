@@ -1,96 +1,119 @@
-<!-- historique.html -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Historique des scans</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <meta charset="UTF-8">
+  <title>Historique des scans</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap + DataTables -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
 </head>
-<body class="p-4">
+<body>
 
+  <!-- BANNIÈRE DE NAVIGATION -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Sonde Réseau</a>
+      <div class="d-flex">
+        <a href="{{ url_for('historique') }}" class="btn btn-secondary me-2">📜 Historique complet</a>
+        <a href="{{ url_for('vulns') }}" class="btn btn-warning">🔓 Vulnérabilités</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
     <h1 class="mb-4">📜 Historique des scans</h1>
-    <a href="/" class="btn btn-secondary mb-3">⬅ Retour</a>
 
     <table id="historiqueTable" class="table table-bordered table-striped">
-        <thead class="table-dark">
-            <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>IP</th>
-                <th>OS</th>
-                <th>Nom</th>
-                <th>Ports</th>
-                <th>Rôle</th>
-                <th>Services détaillés</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for scan in entries %}
-            <tr>
-                <td>{{ scan.timestamp }}</td>
-                <td>{{ scan.scan_type }}</td>
-                <td>{{ scan.ip }}</td>
-                <td>{{ scan.os }}</td>
-                <td>{{ scan.hostname or "" }}</td>
-                <td>
-                    {% if scan.ports %}
-                        {{ scan.ports }}
-                    {% else %}
-                        <em>—</em>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if scan.role %}
-                        {{ scan.role }}
-                    {% else %}
-                        <em>—</em>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if scan.services_rel %}
-                        <ul class="mb-0">
-                        {% for svc in scan.services_rel %}
-                            <li>
-                                <strong>Port :</strong> {{ svc.port or "—" }} —
-                                <strong>Nom :</strong> {{ svc.name or "—" }} —
-                                <strong>Produit :</strong> {{ svc.product or "—" }} —
-                                <strong>Version :</strong> {{ svc.version or "—" }}
-                                {% if svc.cves %}
-                                    <br/><em class="text-danger">CVE(s) : {{ svc.cves }}</em>
-                                {% endif %}
-                            </li>
-                        {% endfor %}
-                        </ul>
-                    {% elif scan.services %}
-                        <ul class="mb-0">
-                            {% for line in scan.services.split('\n') %}
-                                {% if line.strip() %}
-                                    <li>{{ line }}</li>
-                                {% endif %}
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <em>—</em>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
+      <thead class="table-dark">
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>IP</th>
+          <th>OS</th>
+          <th>Nom</th>
+          <th>Ports</th>
+          <th>Rôle</th>
+          <th>Services détaillés</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for scan in entries %}
+        <tr>
+          <td>{{ scan.timestamp }}</td>
+          <td>{{ scan.scan_type }}</td>
+          <td>{{ scan.ip }}</td>
+          <td>{{ scan.os }}</td>
+          <td>{{ scan.hostname or "" }}</td>
+          <td>
+            {% if scan.ports %}
+              {{ scan.ports }}
+            {% else %}
+              <em>—</em>
+            {% endif %}
+          </td>
+          <td>
+            {% if scan.role %}
+              {{ scan.role }}
+            {% else %}
+              <em>—</em>
+            {% endif %}
+          </td>
+          <td>
+            {% if scan.services_rel %}
+              <ul class="mb-0">
+                {% for svc in scan.services_rel %}
+                <li>
+                  <strong>Port :</strong> {{ svc.port or "—" }} —
+                  <strong>Nom :</strong> {{ svc.name or "—" }} —
+                  <strong>Produit :</strong> {{ svc.product or "—" }} —
+                  <strong>Version :</strong> {{ svc.version or "—" }}
+                  {% if svc.cves %}
+                    <br/>
+                    <em class="text-danger">
+                      CVE(s) :
+                      {% for c in svc.cves.split(',') %}
+                        <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
+                           target="_blank">
+                          <code>{{ c }}</code>
+                        </a>
+                      {% endfor %}
+                    </em>
+                  {% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+            {% elif scan.services %}
+              <ul class="mb-0">
+                {% for line in scan.services.split('\n') %}
+                  {% if line.strip() %}
+                    <li>{{ line }}</li>
+                  {% endif %}
+                {% endfor %}
+              </ul>
+            {% else %}
+              <em>—</em>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
+  </div>
 
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <script>
-    $(document).ready(function(){
-        $('#historiqueTable').DataTable({
-            "order": [[0, "desc"]],
-            "language": {
-                "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json"
-            }
-        });
+  <!-- Scripts -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      $('#historiqueTable').DataTable({
+        order: [[0, 'desc']],
+        language: {
+          url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json'
+        }
+      });
     });
-    </script>
-
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
