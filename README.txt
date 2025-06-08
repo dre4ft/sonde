@@ -1,3 +1,21 @@
+ Configuration de la clé API VulnersAdd commentMore actions
+Pour activer la détection de vulnérabilités (CVEs), vous devez définir la clé API de Vulners via une variable d’environnement nommée VULNERS_API_KEY.
+
+Exemple (dans le terminal ou le fichier ~/.bashrc) :
+bash
+Copier
+Modifier
+export VULNERS_API_KEY="votre_clé_api"
+Option recommandée (dans le venv) :
+Ajoutez cette ligne à la fin du fichier venv-sonde/bin/activate :
+
+bash
+Copier
+Modifier
+export VULNERS_API_KEY="votre_clé_api"
+Cela garantit que la clé est chargée automatiquement à chaque activation de l’environnement virtuel.
+
+
 🧩 Fonctionnement de la sonde d’audit réseau
 🎯 Objectif principal
 La sonde a pour but d'analyser le réseau local afin de :
