@@ -149,22 +149,25 @@
                         {% elif count <= 5 %}
                           <div>
                             {% for c in cves %}
-                              <code>{{ c }}</code><br>
+                              <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
+                                 target="_blank"><code>{{ c }}</code></a><br>
                             {% endfor %}
                           </div>
                         {% else %}
                           <div>
                             {% for c in cves[:5] %}
-                              <code>{{ c }}</code><br>
+                              <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
+                                 target="_blank"><code>{{ c }}</code></a><br>
                             {% endfor %}
-                            <a class="small" data-bs-toggle="collapse"
-                               href="#more-{{ hidx }}-{{ sidx }}"
-                               role="button">
+                            <button class="btn btn-sm btn-outline-secondary" type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#more-{{ hidx }}-{{ sidx }}">
                               Voir {{ count-5 }} autres
-                            </a>
+                            </button>
                             <div class="collapse mt-1" id="more-{{ hidx }}-{{ sidx }}">
                               {% for c in cves[5:] %}
-                                <code>{{ c }}</code><br>
+                                <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
+                                   target="_blank"><code>{{ c }}</code></a><br>
                               {% endfor %}
                             </div>
                           </div>
@@ -192,8 +195,9 @@
     <!-- CARTE DU RÉSEAU -->
     <h2 class="mt-4">Cartographie du réseau</h2>
     <div id="network"></div>
-    <!-- MARGE AU-DESSOUS DE LA CARTOGRAPHIE -->
-    <div class="mb-5"></div>
+
+    <!-- Petite marge pour éviter qu’on ne touche le bas de page -->
+    <div style="margin-bottom: 100px;"></div>
 </div>
 
 <script>
