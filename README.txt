@@ -1,121 +1,113 @@
-# 📡 Sonde d'Audit Réseau - Projet Python/Flask/Nmap/SQLite
+🧩 Fonctionnement de la sonde d’audit réseau
+🎯 Objectif principal
+La sonde a pour but d'analyser le réseau local afin de :
 
-Ce projet transforme un Raspberry Pi en **sonde d’audit réseau** capable de :
+détecter les machines actives (par balayage IP),
 
-- 🔍 Scanner un réseau local avec Nmap (rapide, standard, approfondi)
-- 🧠 Classer automatiquement les machines selon leur rôle (poste, imprimante, caméra…)
-- 🧾 Sauvegarder les résultats dans :
-  - un fichier `.json`
-  - une base **SQLite** persistante (`scans.db`)
-- 🌐 Offrir une interface web Flask :
-  - pour visualiser le **dernier scan**
-  - pour accéder à **l’historique complet** avec détails
+identifier leurs rôles (poste utilisateur, serveur, caméra...),
 
----
+recenser les ports/services exposés,
 
-## ⚙️ Structure Technique
+et relever les éventuelles vulnérabilités (CVEs) connues via la base Vulners.
 
-### 🗺️ `scan.py` – Script de scan
+Elle centralise ces informations dans une interface web claire, interactive et exploitable par un administrateur.
 
-1. Vérifie les droits `sudo`
-2. Ping scan pour détecter les hôtes
-3. Scan ciblé via Nmap :
-   - `--script nbstat` → rapide
-   - `-O -T4` → standard
-   - `-A -T4` → approfondi
-4. Résolution DNS et NetBIOS
-5. Détection de ports, OS, services
-6. Catégorisation du rôle de l'hôte
-7. Sauvegarde dans :
-   - Fichier JSON
-   - Base SQLite
+⚙️ Architecture générale
+1. Composants principaux
+Élément	Rôle
+scan.py	Script principal qui réalise les scans (Nmap + enrichissements).
+app.py	Application Flask qui gère l’interface web et les routes backend.
+BD.db	Base SQLite avec SQLAlchemy stockant l’historique des scans.
+index.html	Page principale de visualisation des résultats.
+historique.html	Page dédiée à l’historique complet des scans enregistrés.
 
-### 🗃️ `BD/db.py` – Base de données SQLite
+🔍 Processus de scan
+Étape 1 : Lancement
+Depuis l’IHM (index.html), l’utilisateur peut :
 
-- Utilise **SQLAlchemy**
-- Stocke chaque hôte scanné avec :
-  - IP, OS, ports, hostname, rôle, services…
-- Permet l’historique, les statistiques, les analyses comparatives
+choisir un type de scan (rapide, standard, approfondi),
 
-### 🌐 `app.py` – Application Flask
+spécifier une plage IP (192.168.1.0/24),
 
-- Interface web accessible sur : `http://[IP-RPi]:5000`
-- Routes disponibles :
-  - `/` → affichage du dernier scan
-  - `/scan` → exécution manuelle d’un scan
-  - `/historique` → visualisation de tous les scans (via DB)
+activer ou non l’option -sV (detection des versions de services).
 
----
+Cela déclenche la route /scan dans Flask (POST), qui exécute scan.py via un subprocess.
 
-## 🧾 Fichiers générés
+Étape 2 : Collecte et enrichissement
+Le script scan.py effectue :
 
-- `resultatrapide.json`, `resultatmoyen.json`, `resultatapprofondie.json`
-- `lastscan.txt` → contient le nom du dernier scan consulté
-- `scans.db` → base SQLite persistante même en cas de redémarrage
+Un scan réseau avec Nmap, selon les options choisies.
 
----
+Une tentative de catégorisation du rôle de chaque hôte (Endpoint, Service, Maintenance, etc.).
 
-## 🧠 Fonctionnalités
+Une résolution des noms DNS/NetBIOS.
 
-| Fonction                            | Description |
-|-------------------------------------|-------------|
-| 🔎 Scan réseau avec Nmap            | Ping + ports + OS + services |
-| 🧠 Catégorisation automatique       | Rôle des hôtes selon heuristique |
-| 🗃️ Historique des scans en SQLite | Via SQLAlchemy |
-| 🌐 Interface web Flask              | Visualisation + interaction |
-| 💾 Persistance JSON + DB           | Pour traitement ou export |
-| 📊 Préparation à une cartographie  | Intégration future avec `vis-network.js` |
+Une interrogation de l’API Vulners (si activée) pour identifier les CVE associées aux services détectés.
 
----
+Les résultats sont :
 
-## ▶️ Lancer l’application
+enregistrés dans un fichier .json local (resultat*.json) pour consultation immédiate,
 
-sudo ~/venv-sonde/bin/python3 app.py
+et insérés dans la base de données via SQLAlchemy (table Scan, Service).
 
-📂 Structure du projet
-.
-├── scan.py                  # Scanner réseau
-├── app.py                   # Interface web
-├── BD/
-│   └── db.py                # Base de données
-├── templates/
-│   ├── index.html
-│   └── historique.html
-├── static/
-│   └── icons/
-├── resultatrapide.json      # Résultat scan rapide
-├── resultatmoyen.json       # Résultat scan standard
-├── resultatapprofondie.json # Résultat scan approfondi
-├── lastscan.txt             # Nom du dernier fichier
-└── scans.db                 # Base SQLite
+Étape 3 : Affichage dynamique
+🔹 Mode par défaut
+Lors de l’accès à /, Flask lit le fichier du dernier scan effectué (lastscan.txt) et charge son contenu JSON dans la variable data.
 
+🔹 Mode "historique"
+L'utilisateur peut aussi choisir un scan passé dans une liste déroulante (dates), qui déclenche la route /show_scan?scan_time=....
+Flask reconstruit alors data à partir des enregistrements SQL (Scan + Service) pour cette date.
 
- Configuration de la clé API Vulners
-Pour activer la détection de vulnérabilités (CVEs), vous devez définir la clé API de Vulners via une variable d’environnement nommée VULNERS_API_KEY.
+Étape 4 : Rendu dans l’IHM
+La page affiche :
 
-Exemple (dans le terminal ou le fichier ~/.bashrc) :
-bash
-Copier
-Modifier
-export VULNERS_API_KEY="votre_clé_api"
-Option recommandée (dans le venv) :
-Ajoutez cette ligne à la fin du fichier venv-sonde/bin/activate :
+un tableau dynamique avec les hôtes détectés, leur OS, leurs ports ouverts, leurs services et leurs vulnérabilités,
 
-bash
-Copier
-Modifier
-export VULNERS_API_KEY="votre_clé_api"
-Cela garantit que la clé est chargée automatiquement à chaque activation de l’environnement virtuel.
+une carte réseau interactive (grâce à Vis.js),
 
+des filtres et éléments visuels : icônes de rôles, badge de CVE, etc.
 
+Les CVEs sont abrégées par défaut : seules les 5 premières s'affichent, avec un lien "Voir plus" pour révéler les suivantes (via Bootstrap Collapse).
 
+📦 Stockage des résultats
+1. Base de données (SQLite)
+Table Scan : un enregistrement par machine scannée (avec horodatage, IP, OS...).
 
+Table Service : services détectés liés à chaque Scan, avec leurs CVE associées.
 
-Évolutions possibles
-Cartographie dynamique avec vis-network.js
-Export CSV/PDF des scans
-Statistiques détaillées (types d’OS, ports exposés, etc.)
-Détection de changement entre scans
-Interface web sécurisée avec login
-Notification email
+2. Fichiers JSON
+Utilisés pour afficher rapidement les résultats récents dans l’interface.
 
+Fichiers typiques : resultatrapide.json, resultatmoyen.json, resultatapprofondie.json.
+
+🛡️ Fonctionnalités de sécurité
+Clé secrète Flask définie dans app.secret_key.
+
+Protection API : la clé Vulners est injectée dans l’environnement, sans stockage direct dans le code.
+
+Encodage JSON en UTF-8, gestion des erreurs de parsing.
+
+Logs et messages d'erreur clairs via flash() pour aider au debug.
+
+✅ Fonctionnalités principales en résumé
+Fonction	Implémenté
+Scan Nmap avec ou sans détection de version	✔️
+Détection de rôles d’équipements	✔️
+Résolution DNS / NetBIOS	✔️
+Détection de CVEs via Vulners	✔️
+Stockage base SQLite	✔️
+Consultation JSON ou base selon contexte	✔️
+Interface claire + responsive + carto	✔️
+Historique de scans consultable	✔️
+Réduction dynamique des longues listes CVE	✔️
+
+🚀 Idées d’évolutions possibles
+Affichage filtrable par niveau de sévérité CVE (critique, haut, moyen, bas).
+
+Intégration d’une authentification admin.
+
+Ajout d’un export PDF ou CSV.
+
+Analyse passive complémentaire (via Zeek, par exemple).
+
+Détection de comportements anormaux (à venir ?).
