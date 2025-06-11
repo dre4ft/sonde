@@ -5,10 +5,10 @@ from sqlalchemy.orm import joinedload
 from datetime import datetime
 from collections import Counter
 
-from BD.db import init_db, Session, Scan, Service
+from BD.db import init_db, Session, Scan, Service, CVE
 
 app = Flask(__name__)
-app.secret_key = 'cle-ultra-secrete'
+app.secret_key = 'cle-cle-très-secrète'
 
 
 @app.route("/")
@@ -103,17 +103,16 @@ def show_scan():
 
     data = []
     for scan in scans:
-        # protège contre scan.ports None
-        ports_raw = scan.ports or ""
+        ports_raw  = scan.ports or ""
         ports_list = [int(p) for p in ports_raw.split(",") if p.strip()]
 
         host = {
-            "ip": scan.ip,
-            "os": scan.os,
+            "ip":       scan.ip,
+            "os":       scan.os,
             "hostname": scan.hostname,
-            "netbios": scan.netbios,
-            "ports": ports_list,
-            "role": scan.role,
+            "netbios":  scan.netbios,
+            "ports":    ports_list,
+            "role":     scan.role,
             "services": []
         }
         for svc in scan.services_rel:
@@ -122,17 +121,17 @@ def show_scan():
             host["services"].append({"info": info, "cves": cves})
         data.append(host)
 
-    has_ports    = any(h.get("ports")    for h in data)
-    has_role     = any(h.get("role")     for h in data)
-    has_services = any(h.get("services") for h in data)
-    has_hostname = any(h.get("hostname") for h in data)
-    has_netbios  = any(h.get("netbios")  for h in data)
-    has_cves     = any(svc["cves"] for h in data for svc in h["services"])
+    has_ports    = any(h["ports"]    for h in data)
+    has_role     = any(h["role"]     for h in data)
+    has_services = any(h["services"] for h in data)
+    has_hostname = any(h["hostname"] for h in data)
+    has_netbios  = any(h["netbios"]  for h in data)
+    has_cves     = any(c for h in data for c in h["services"] if c["cves"])
 
     return render_template(
         "index.html",
         data=data,
-        filename=None,  # provient de la BD, pas d'un fichier JSON
+        filename=None,  # on affiche un scan issu de la BD
         history=history,
         has_ports=has_ports,
         has_role=has_role,
@@ -185,27 +184,36 @@ def historique():
 @app.route("/vulns")
 def vulns():
     session = Session()
-    # eager-load du scan associé
-    services = session.query(Service).options(joinedload(Service.scan)).all()
-    session.close()
 
-    counter = Counter()
+    # 1) Compte occurrences et hôtes
+    services = session.query(Service) \
+                      .options(joinedload(Service.scan)) \
+                      .all()
+
+    counter   = Counter()
     hosts_map = {}
     for svc in services:
         ip = svc.scan.ip if svc.scan else None
-        for cve in (svc.cves.split(",") if svc.cves else []):
-            cve = cve.strip()
-            if not cve:
+        for code in (svc.cves.split(",") if svc.cves else []):
+            code = code.strip()
+            if not code:
                 continue
-            counter[cve] += 1
-            hosts_map.setdefault(cve, set()).add(ip)
+            counter[code] += 1
+            hosts_map.setdefault(code, set()).add(ip)
 
+    # 2) Récupère tous les CVE en cache pour leur score
+    cve_objs  = session.query(CVE).filter(CVE.code.in_(counter.keys())).all()
+    score_map = {c.code: c.cvss_score for c in cve_objs}
+
+    session.close()
+
+    # 3) Construit la liste finalisée
     vulns_list = []
     for cve, count in counter.most_common():
-        # filtre les IP None avant tri
-        clean_hosts = sorted(h for h in hosts_map[cve] if h)
+        clean_hosts = sorted(x for x in hosts_map[cve] if x)
         vulns_list.append({
-            "cve": cve,
+            "cve":   cve,
+            "score": score_map.get(cve),
             "count": count,
             "hosts": clean_hosts
         })
