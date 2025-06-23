@@ -2,15 +2,18 @@
 import os
 import json
 import subprocess
-from flask import Flask, render_template, redirect, url_for, flash, request
-from sqlalchemy import func
-from sqlalchemy.orm import joinedload
+import threading
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
+from sqlalchemy import func, create_engine
+from sqlalchemy.orm import joinedload, sessionmaker
 from datetime import datetime
 from collections import Counter
 from pymongo import MongoClient
-from pymongo import MongoClient
 
-from BD.db import init_db, Session, Scan, Service, CVE
+from BD.scan_db import init_db, Session, Scan, Service, CVE
+from BD.packet_db import init_packet_db, Packet,SessionPackets # import Packet depuis ta db de paquets
+from capture import start_capture, stop_capture,get_rules
+from rule_engine import RulesEngine
 
 # ─── Config MongoDB CVE ─────────────────────────────────────────────────────────
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
@@ -36,6 +39,12 @@ def cvss_category(score):
 
 app.jinja_env.filters["cvss_category"] = cvss_category
 
+@app.route("/passive_scan")
+def passive_scan():
+    # Cette route remplace la racine FastAPI "/"
+    # On affiche passive_scan.html au lieu de index.html
+    # Tu peux aussi passer les données nécessaires ici
+    return render_template("passive_scan.html")
 
 @app.route("/")
 def index():
@@ -312,6 +321,49 @@ def software():
     softwares = list(db["software_logs"].find().sort("timestamp", -1))
     return render_template("software.html", softwares=softwares)
     
+
+@app.route("/api/packets/")
+def api_get_packets():
+    session = SessionPackets()
+    try:
+        packets = session.query(Packet).order_by(Packet.id.desc()).limit(100).all()
+        results = []
+        for p in packets:
+            results.append({
+                "id": p.id,
+                "timestamp": p.timestamp.isoformat() if p.timestamp else None,
+                "src_ip": p.src_ip,
+                "dst_ip": p.dst_ip,
+                "protocol": p.protocol,
+                "src_port": p.src_port,
+                "dst_port": p.dst_port,
+                "raw": p.raw,
+                "rule_matched": p.rule_matched
+            })
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        session.close()
+
+@app.route("/api/rules/")
+def api_get_rules():
+    return  get_rules()
+
+@app.route("/api/start_capture", methods=["POST"])
+def api_start_capture():
+    interface = request.form.get("interface", "lo0")
+    started = start_capture(interface)
+    if not started:
+        return jsonify({"error": "Capture déjà en cours"}), 400
+    return jsonify({"status": "capture démarrée", "interface": interface})
+
+@app.route("/api/stop_capture", methods=["POST"])
+def api_stop_capture():
+    stop_capture()
+    return jsonify({"status": "capture arrêtée"})
+
 if __name__ == "__main__":
     init_db()
+    init_packet_db()
     app.run(host="0.0.0.0", port=5000)

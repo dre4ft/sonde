@@ -17,7 +17,7 @@ import nmap
 from pymongo import MongoClient
 from packaging.version import Version, InvalidVersion
 from rapidfuzz import process, fuzz
-from BD.db import init_db, save_scan_entry  # historique
+from BD.scan_db import init_db, save_scan_entry  # historique
 # Initialisation de la base avant toute opération de scan
 init_db()
 

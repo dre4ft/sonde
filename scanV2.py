@@ -4,7 +4,7 @@ import os
 import sys
 from vulners import Vulners
 import os
-from BD.db import save_scan_entry
+from BD.scan_db import save_scan_entry
 
 
 api_key = os.environ.get("VULNERS_API_KEY")
