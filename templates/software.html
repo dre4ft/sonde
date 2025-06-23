@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Logiciels détectés{% endblock %}
+
+{% block extra_css %}
+  <!-- DataTables CSS -->
+  <link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+  <h1 class="mb-4">🛠️ Logiciels détectés sur le réseau</h1>
+
+  <table id="softwareTable" class="table table-bordered table-striped">
+    <thead class="table-dark">
+      <tr>
+        <th>Date</th>
+        <th>Adresse IP</th>
+        <th>Port</th>
+        <th>Type</th>
+        <th>Logiciel</th>
+        <th>Version</th>
+        <th>Version brute</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sw in softwares %}
+      <tr>
+        <td>
+          {{ sw.timestamp.strftime("%Y-%m-%d %H:%M:%S") if sw.timestamp else '—' }}
+        </td>
+        <td>{{ sw.ip }}</td>
+        <td>{{ sw.port or '—' }}</td>
+        <td>{{ sw.type }}</td>
+        <td>{{ sw.software }}</td>
+        <td>{{ sw.version or '—' }}</td>
+        <td>{{ sw.raw_version or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
+
+{% block extra_js %}
+  <!-- jQuery + DataTables JS -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      $('#softwareTable').DataTable({
+        order: [[0, 'desc']],  // Tri décroissant sur la date
+        language: {
+          url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json'
+        }
+      });
+    });
+  </script>
+{% endblock %}
