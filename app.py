@@ -1,14 +1,40 @@
+#!/usr/bin/env python3
+import os
+import json
+import subprocess
 from flask import Flask, render_template, redirect, url_for, flash, request
-import json, os, subprocess
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from datetime import datetime
 from collections import Counter
+from pymongo import MongoClient
+from pymongo import MongoClient
 
 from BD.db import init_db, Session, Scan, Service, CVE
 
+# ─── Config MongoDB CVE ─────────────────────────────────────────────────────────
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+CVE_DB    = "cvedb"
+
+mongo_client = MongoClient(MONGO_URI, tz_aware=False)
+cve_col      = mongo_client[CVE_DB]["cves"]
+
+# ─── Flask app ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = 'cle-cle-très-secrète'
+
+def cvss_category(score):
+    if score is None:
+        return None
+    if score >= 9.0:
+        return "critical"
+    if score >= 7.0:
+        return "high"
+    if score >= 4.0:
+        return "medium"
+    return "low"
+
+app.jinja_env.filters["cvss_category"] = cvss_category
 
 
 @app.route("/")
@@ -26,6 +52,7 @@ def index():
         except json.JSONDecodeError:
             flash(f"⚠️ Le fichier {filename} est vide ou corrompu.", "warning")
 
+    # On récupère la liste des timestamps pour le sélecteur
     session = Session()
     rows = (
         session.query(
@@ -105,7 +132,6 @@ def show_scan():
     for scan in scans:
         ports_raw  = scan.ports or ""
         ports_list = [int(p) for p in ports_raw.split(",") if p.strip()]
-
         host = {
             "ip":       scan.ip,
             "os":       scan.os,
@@ -131,7 +157,7 @@ def show_scan():
     return render_template(
         "index.html",
         data=data,
-        filename=None,  # on affiche un scan issu de la BD
+        filename=None,
         history=history,
         has_ports=has_ports,
         has_role=has_role,
@@ -183,15 +209,48 @@ def historique():
 
 @app.route("/vulns")
 def vulns():
+    """
+    Recense les CVEs, filtre sur le scan le plus récent par défaut
+    ou sur celui choisi, et n'affiche que les scores stockés en local.
+    """
     session = Session()
 
-    # 1) Compte occurrences et hôtes
-    services = session.query(Service) \
-                      .options(joinedload(Service.scan)) \
-                      .all()
+    # 1) On récupère les dates disponibles
+    rows = (
+        session.query(
+            func.strftime('%Y-%m-%d %H:%M:%S', Scan.timestamp).label('ts')
+        )
+        .distinct()
+        .order_by(Scan.timestamp.desc())
+        .all()
+    )
+    history = [r.ts for r in rows]
 
-    counter   = Counter()
-    hosts_map = {}
+    # 2) scan_time = paramètre GET ou le plus récent si absent
+    scan_time = request.args.get("scan_time") or (history[0] if history else None)
+    selected_scan = scan_time
+
+    # 3) Chargement des services pour ce scan
+    if scan_time:
+        try:
+            datetime.strptime(scan_time, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            flash("⚠️ Date de scan invalide.", "warning")
+            return redirect(url_for("vulns"))
+        services = (
+            session.query(Service)
+                   .join(Scan)
+                   .options(joinedload(Service.scan))
+                   .filter(
+                       func.strftime('%Y-%m-%d %H:%M:%S', Scan.timestamp) == scan_time
+                   )
+                   .all()
+        )
+    else:
+        services = session.query(Service).options(joinedload(Service.scan)).all()
+
+    # 4) Comptage et regroupement
+    counter, hosts_map = Counter(), {}
     for svc in services:
         ip = svc.scan.ip if svc.scan else None
         for code in (svc.cves.split(",") if svc.cves else []):
@@ -201,26 +260,58 @@ def vulns():
             counter[code] += 1
             hosts_map.setdefault(code, set()).add(ip)
 
-    # 2) Récupère tous les CVE en cache pour leur score
-    cve_objs  = session.query(CVE).filter(CVE.code.in_(counter.keys())).all()
-    score_map = {c.code: c.cvss_score for c in cve_objs}
+    # 5) Récupération des scores CVSS (local)
+    mongo_score = {}
+    for cve_id in counter.keys():
+        doc = cve_col.find_one(
+            {"id": cve_id},
+            {"_id": 0, "cvss": 1, "cvss2": 1, "cvss3": 1}
+        )
+        score = None
+        if doc:
+            # format ancien
+            val = doc.get("cvss")
+            if isinstance(val, (int, float)):
+                score = val
+            elif isinstance(val, dict):
+                score = val.get("score")
+            # NVD v3
+            elif isinstance(doc.get("cvss3"), (int, float)):
+                score = doc["cvss3"]
+            elif isinstance(doc.get("cvss3"), dict):
+                score = doc["cvss3"].get("baseScore") or doc["cvss3"].get("score")
+            # fallback v2
+            elif isinstance(doc.get("cvss2"), dict):
+                score = doc["cvss2"].get("baseScore") or doc["cvss2"].get("score")
+        mongo_score[cve_id] = score
 
     session.close()
 
-    # 3) Construit la liste finalisée
+    # 6) Préparation du contexte pour le template
     vulns_list = []
-    for cve, count in counter.most_common():
-        clean_hosts = sorted(x for x in hosts_map[cve] if x)
+    for cve, cnt in counter.most_common():
+        hosts = sorted(h for h in hosts_map.get(cve, []) if h)
         vulns_list.append({
             "cve":   cve,
-            "score": score_map.get(cve),
-            "count": count,
-            "hosts": clean_hosts
+            "score": mongo_score.get(cve),
+            "count": cnt,
+            "hosts": hosts
         })
 
-    return render_template("vulns.html", vulns=vulns_list)
+    return render_template(
+        "vulns.html",
+        vulns=vulns_list,
+        history=history,
+        selected_scan=selected_scan
+    )
 
-
+@app.route('/software')
+def software():
+    client    = MongoClient(MONGO_URI, tz_aware=False)
+    db        = client["zeek"]
+    softwares = list(db["software_logs"].find().sort("timestamp", -1))
+    return render_template("software.html", softwares=softwares)
+    
 if __name__ == "__main__":
     init_db()
     app.run(host="0.0.0.0", port=5000)

@@ -1,245 +1,220 @@
 #!/usr/bin/env python3
-import re
+"""
+scan.py — Découverte réseau (Nmap) + corrélation CVE 100 % locale.
+
+Dépendances :
+  sudo apt install nmap
+  pip install python-nmap pymongo packaging rapidfuzz
+  MongoDB « cvedb » rempli par cve-search / CveXplore
+  SQLite initialisé via BD/db.py
+
+© 2025
+"""
+from __future__ import annotations
+import argparse, json, os, re, sys
+from typing import List, Dict, Any
 import nmap
-import json
-import os
-import sys
-import argparse
-import vulners
+from pymongo import MongoClient
+from packaging.version import Version, InvalidVersion
+from rapidfuzz import process, fuzz
+from BD.db import init_db, save_scan_entry  # historique
+# Initialisation de la base avant toute opération de scan
+init_db()
 
-from BD.db import save_scan_entry
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+CVE_DB = "cvedb"
 
-# On récupère la clé API Vulners dans la variable d'environnement
-api_key = os.environ.get("VULNERS_API_KEY")
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+def normalize_version(v: str) -> str:
+    v = v or ""
+    if m := re.search(r"(\d+\.\d+\.\d+)", v): return m.group(1)
+    if m := re.search(r"(\d+\.\d+)", v): return m.group(1)
+    return v.strip()
 
+def nmap_args(profile: str, want_cve: bool) -> str:
+    match profile:
+        case "quick":    return "-sV" if want_cve else "--script nbstat"
+        case "standard": return "-O -T4 -sV" if want_cve else "-O -T4"
+        case "deep":     return "-A -T4"
+        case _:           return "-O -T4"
 
-def normalize_version(version: str) -> str:
-    """
-    Extrait la première séquence de chiffres du type "x.y" ou "x.y.z..."
-    dans la chaîne `version`. Si rien trouvé, renvoie la chaîne initiale.
-    Exemples :
-      "gen_2.86_v1.2.3"       → "2.86"
-      "9.2p1 Debian 2+deb12u6" → "9.2.1" (si on veut extraire x.y.z)
-      "1.0.2"                  → "1.0.2"
-      ""                       → ""
-    """
-    # On cherche d'abord un motif "x.y.z" (au moins deux points)
-    m = re.search(r"(\d+\.\d+\.\d+)", version)
-    if m:
-        return m.group(1)
+def categorize(ports: List[int], osn: str) -> str:
+    osn_low = osn.lower()
+    pset = set(ports)
+    if 554 in pset or "camera" in osn_low: return "Surveillance"
+    if 9100 in pset or "printer" in osn_low: return "Maintenance"
+    if pset & {3306, 5432, 27017, 1521, 1433}: return "Database"
+    if pset & {80, 443, 8080, 8000, 8443}: return "Web service"
+    if 22 in pset or 3389 in pset: return "Remote access"
+    if pset & {25, 110, 143, 587, 993, 995}: return "Mail service"
+    if 53 in pset: return "DNS"
+    if 161 in pset or any(k in osn_low for k in ("iot","device","embedded")): return "Agent IoT"
+    if any(k in osn_low for k in ("windows","macos","mac")): return "Endpoint"
+    if "linux" in osn_low and pset & {22,80}: return "Endpoint"
+    return "Service" if len(pset)>3 else "Endpoint"
 
-    # Sinon, on cherche un motif "x.y"
-    m = re.search(r"(\d+\.\d+)", version)
-    if m:
-        return m.group(1)
+def sort_cves(lst: List[str]) -> List[str]:
+    return sorted(lst, key=lambda c: int(c.split('-')[1]))
 
-    return version.strip()
+# ─── Classe d'accès CVE ─────────────────────────────────────────────────────────
+class LocalCVE:
+    def __init__(self, uri=MONGO_URI, db=CVE_DB):
+        cli = MongoClient(uri, tz_aware=False)
+        self.cpe  = cli[db]["cpe"]
+        self.cves = cli[db]["cves"]
+        self.known_products = self.cpe.distinct("product")
 
-
-def get_nmap_args(scan_type, vuln):
-    """
-    Retourne les arguments à passer à nmap en fonction du type de scan
-    et de l'activation ou non de la recherche de vulnérabilités (-sV).
-    """
-    if scan_type == "quick":
-        return "-sV" if vuln else "--script nbstat"
-    elif scan_type == "standard":
-        # si vuln=True, on force -sV pour récupérer produit/version
-        return "-O -T4 -sV" if vuln else "-O -T4"
-    elif scan_type == "deep":
-        return "-A -T4"
-    else:
-        return "-O -T4"
-
-
-def categorize(ports, osname):
-    """
-    Catégorisation sommaire en fonction des ports ouverts et du nom d'OS.
-    """
-    osname = osname.lower()
-    if 554 in ports or "camera" in osname:
-        return "Surveillance"
-    elif 9100 in ports or "printer" in osname:
-        return "Maintenance"
-    elif 3389 in ports or 80 in ports or 443 in ports:
-        return "Service"
-    elif "windows" in osname or "mac" in osname:
-        return "Endpoint"
-    elif "linux" in osname and (22 in ports or 80 in ports):
-        return "Endpoint"
-    elif len(ports) > 3:
-        return "Service"
-    else:
-        return "Endpoint"
-
-
-def sort_cves_by_year(cves):
-    """
-    Trie une liste de codes CVE (ex. 'CVE-2023-1234') par année ascendante.
-    """
-    def extract_year(cve_code):
+    @staticmethod
+    def _in_rng(ver, si, se, ei, ee) -> bool:
         try:
-            return int(cve_code.split('-')[1])
-        except (IndexError, ValueError):
-            return 0
+            v = Version(normalize_version(ver))
+        except InvalidVersion:
+            return False
+        if si  and v <  Version(si): return False
+        if se  and v <= Version(se): return False
+        if ei  and v >  Version(ei): return False
+        if ee  and v >=Version(ee): return False
+        return True
 
-    return sorted(cves, key=extract_year)
+    def _fuzzy_product(self, prod: str) -> str:
+        raw = prod.lower().strip()
+        # exact match
+        if raw in self.known_products:
+            return raw
+        # substring match
+        candidates = [k for k in self.known_products if raw in k or k in raw]
+        if candidates:
+            return max(candidates, key=lambda k: fuzz.partial_ratio(raw, k))
+        # fuzzy fallback
+        match = process.extractOne(raw, self.known_products, scorer=fuzz.partial_ratio, score_cutoff=80)
+        return match[0] if match else raw
 
+    def _cpe_names(self, prod: str, ver: str) -> List[str]:
+        if not prod or not ver: return []
+        p = self._fuzzy_product(prod)
+        v = normalize_version(ver)
+        # primaire
+        q = {"product":{"$regex":re.escape(p),"$options":"i"},
+             "$or":[{"version":v},{"padded_version":v},
+                     {"version":{"$exists":False},
+                      "padded_version":{"$exists":False}}]}
+        res = [d["cpeName"] for d in self.cpe.find(q,{"cpeName":1})]
+        if res: return res
+        # fallback vendor
+        vendors = self.cpe.distinct("vendor")
+        vm = process.extractOne(prod, vendors, score_cutoff=80)
+        vendor = vm[0] if vm else prod.lower().split()[0]
+        regex = f":{vendor}:.*:{re.escape(v)}:"
+        fb = self.cpe.find({"cpeName":{"$regex":regex,"$options":"i"}},{"cpeName":1})
+        return [d["cpeName"] for d in fb]
 
-def search_cve(product, version):
-    """
-    Interroge l'API Vulners pour le couple (product, version_norm).
-    Si pas de clé API ou erreur, renvoie [].
+    def cves_for(self, prod: str, ver: str) -> List[str]:
+        if not prod or not ver: return []
+        cp_list = self._cpe_names(prod, ver)
+        found = set()
+        # 1) vulnerable_product
+        for cp in cp_list:
+            for d in self.cves.find({"vulnerable_product":cp},{"id":1}):
+                found.add(d["id"])
+        # 2) configurations exact
+        for cp in cp_list:
+            for doc in self.cves.find({"configurations.nodes.cpe_match":
+                        {"$elemMatch":{"cpe23Uri":cp,"vulnerable":True}}},
+                        {"id":1,"configurations.nodes.cpe_match":1}):
+                cid = doc["id"]
+                for n in doc.get("configurations",{}).get("nodes",[]):
+                    for cm in n.get("cpe_match",[]):
+                        if cm.get("cpe23Uri")==cp and cm.get("vulnerable") and \
+                           self._in_rng(ver, cm.get("versionStartIncluding"), cm.get("versionStartExcluding"), \
+                                            cm.get("versionEndIncluding"), cm.get("versionEndExcluding")):
+                            found.add(cid)
+                            break
+        # 3) range fallback
+        qname = re.escape(self._fuzzy_product(prod))
+        for doc in self.cves.find({"configurations.nodes.cpe_match.cpe23Uri":
+                        {"$regex":qname,"$options":"i"}}, {"id":1,"configurations.nodes.cpe_match":1}):
+            cid = doc["id"]
+            for n in doc.get("configurations",{}).get("nodes",[]):
+                for cm in n.get("cpe_match",[]):
+                    if cm.get("vulnerable") and re.search(qname,cm.get("cpe23Uri",""),re.I) and \
+                       self._in_rng(ver, cm.get("versionStartIncluding"), cm.get("versionStartExcluding"), \
+                                        cm.get("versionEndIncluding"), cm.get("versionEndExcluding")):
+                        found.add(cid)
+                        break
+        return sort_cves(list(found))
 
-    On normalise d'abord `version` avec normalize_version().
-    """
-    if not product or not version:
-        return []
+# ─── Programme principal ───────────────────────────────────────────────────────
+def main() -> None:
+    pa = argparse.ArgumentParser("Scan réseau + CVE locales")
+    pa.add_argument("scan_type", choices=["quick","standard","deep"])
+    pa.add_argument("target",    help="IP ou CIDR (ex : 192.168.1.0/24)")
+    pa.add_argument("-p","--ports", help="Ports Nmap (ex : 80,8080)", default=None)
+    pa.add_argument("-v","--vuln",  action="store_true")
+    pa.add_argument("-d","--debug", action="store_true")
+    a = pa.parse_args()
 
-    if not api_key:
-        print("⚠️ VULNERS_API_KEY non définie, on passe la recherche de CVE.")
-        return []
+    if os.geteuid()!=0: sys.exit("[❌] Lance avec sudo")
 
-    # Normalisation de la version
-    version_norm = normalize_version(version)
-    query = f"{product} {version_norm}".strip()
+    nm = nmap.PortScanner()
+    nm.scan(hosts=a.target, arguments="-sn --host-timeout 30s")
+    live = nm.all_hosts()
+    if not live: sys.exit("[⚠️] Aucun hôte actif.")
 
-    try:
-        vulners_api = vulners.Vulners(api_key)
-    except Exception as e:
-        print(f"⚠️ Erreur initialisation Vulners API : {e}")
-        return []
+    nm2 = nmap.PortScanner()
+    arg = nmap_args(a.scan_type, a.vuln)
+    if a.ports: arg += f" -p {a.ports}"
+    scan_args = f"{arg} --host-timeout 2m"
+    print(f"[🔍] Scan {a.scan_type} sur {a.target} (args : {scan_args})")
+    print("[📡] Hôtes :", ", ".join(live))
+    nm2.scan(hosts=" ".join(live), arguments=scan_args)
 
-    print(f"🔎 Recherche de vulnérabilités pour « {query} » …")
-    try:
-        results = vulners_api.search(query)
-        cves = []
-        for r in results:
-            if "cvelist" in r:
-                cves += r["cvelist"]
-        # On enlève les doublons et on trie
-        return list(set(sort_cves_by_year(cves)))
-    except Exception as e:
-        print(f"⚠️ Erreur recherche CVE : {e}")
-        return []
+    cdb = LocalCVE() if a.vuln else None
+    res: List[Dict[str,Any]] = []
+    for ip in nm2.all_hosts():
+        n = nm2[ip]; r = {"ip":ip}
+        if n.get("hostnames"): r["hostname"] = n["hostnames"][0]["name"]
 
+        if a.scan_type=="quick":
+            for s in n.get("hostscript",[]):
+                if s["id"]=="nbstat": r["netbios"]=s["output"]
+            res.append(r); continue
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Scanner de réseau avec détection optionnelle des vulnérabilités."
-    )
-    parser.add_argument(
-        "scan_type", choices=["quick", "standard", "deep"], help="Type de scan"
-    )
-    parser.add_argument("target", help="Plage d'IP ou IP unique à scanner")
-    parser.add_argument(
-        "-v", "--vuln", action="store_true", help="Activer la recherche de vulnérabilités"
-    )
-    args = parser.parse_args()
+        ports = list(n.get("tcp",{}).keys()); r["ports"]=ports
+        osm   = n.get("osmatch") or []
+        osn   = osm[0].get("name","Unknown") if osm else "Unknown"
+        r["os"]   = osn
+        r["role"] = categorize(ports,osn)
 
-    # Nécessite d'être root pour un scan -sn / -O etc.
-    if os.geteuid() != 0:
-        print("[❌] Ce script doit être exécuté avec sudo.")
-        sys.exit(1)
+        sv: List[Dict[str,Any]] = []
+        # Affichage des services détectés (port, produit, version)
+        # Affichage des services détectés (port, produit, version)
+        print(f"[SERV] {ip}:")
+        for p in ports:
+            d = n["tcp"][p]
+            prod = d.get("product","")
+            ver  = d.get("version","")
+            name = d.get("name","")
+            cves = cdb.cves_for(prod,ver) if cdb else []
+            if a.debug:
+                print(f"[DBG] {ip}:{p:<5} {prod or name} {ver} → {len(cves)} CVE")
+            # Champ 'info' pour l'affichage
+            info = f"{prod or name} {ver}".strip()
+            sv.append({
+                "port": p,
+                "name": name,
+                "product": prod,
+                "version": ver,
+                "cves": cves,
+                "info": info
+            })
+        r["services"] = sv
+        res.append(r)
 
-    arguments = get_nmap_args(args.scan_type, args.vuln)
-    output_file = {
-        "quick": "resultatrapide.json",
-        "standard": "resultatmoyen.json",
-        "deep": "resultatapprofondie.json",
-    }.get(args.scan_type, "resultatmoyen.json")
+    out = {"quick":"resultatrapide.json","standard":"resultatmoyen.json","deep":"resultatapprofondie.json"}[a.scan_type]
+    json.dump(res, open(out,"w"), indent=4,ensure_ascii=False)
+    open("lastscan.txt","w").write(out)
+    try: save_scan_entry(a.scan_type,res)
+    except Exception as e: print(f"[⚠️] DB : {e}")
+    print(f"[✅] Scan terminé → {out}")
 
-    print(f"[🔍] Scan {args.scan_type} lancé sur {args.target}…")
-
-    try:
-        # Étape 1 : ping-scan pour détecter les hôtes actifs
-        ping_scan = nmap.PortScanner()
-        ping_scan.scan(hosts=args.target, arguments="-sn")
-        live_hosts = ping_scan.all_hosts()
-
-        if not live_hosts:
-            print("[⚠️] Aucun hôte détecté sur le réseau.")
-            sys.exit(1)
-
-        print(f"[📡] Hôtes actifs détectés : {', '.join(live_hosts)}")
-
-        # Étape 2 : scan ciblé avec les arguments définis
-        scanner = nmap.PortScanner()
-        scanner.scan(hosts=" ".join(live_hosts), arguments=arguments)
-
-    except Exception as e:
-        print(f"[❌] Erreur lors du scan : {e}")
-        sys.exit(1)
-
-    results = []
-
-    for host in scanner.all_hosts():
-        result = {"ip": host, "os": "Unknown"}
-
-        # Résolution DNS
-        hostnames = scanner[host].get("hostnames", [])
-        if hostnames:
-            result["hostname"] = hostnames[0].get("name", "")
-
-        # Si scan rapide ("quick"), on récupère uniquement netbios via nbstat
-        if args.scan_type == "quick":
-            scripts = scanner[host].get("hostscript", [])
-            for script in scripts:
-                if script.get("id") == "nbstat":
-                    result["netbios"] = script.get("output", "")
-
-        # Si scan standard ou approfondi, on récupère ports, OS, rôle, puis services
-        if args.scan_type != "quick":
-            ports = list(scanner[host].get("tcp", {}).keys())
-            result["ports"] = ports
-
-            osmatches = scanner[host].get("osmatch", [])
-            osname = osmatches[0].get("name", "Unknown") if osmatches else "Unknown"
-            result["os"] = osname
-            result["role"] = categorize(ports, osname)
-
-            # Construire la liste "services" dans tous les cas
-            services = []
-            for port in ports:
-                port_data = scanner[host]["tcp"][port]
-                name = port_data.get("name", "")
-                product = port_data.get("product", "")
-                version = port_data.get("version", "")
-
-                # Si on a demandé la recherche de vulnérabilités, on interroge Vulners
-                if args.vuln:
-                    cves = search_cve(product, version)
-                else:
-                    cves = []
-
-                services.append({
-                    "port": port,
-                    "name": name,
-                    "product": product,
-                    "version": version,
-                    "cves": cves
-                })
-
-            result["services"] = services
-
-        results.append(result)
-
-    # Sauvegarde JSON
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=4, ensure_ascii=False)
-
-    # On écrit aussi le nom du dernier fichier dans lastscan.txt
-    with open("lastscan.txt", "w", encoding="utf-8") as f:
-        f.write(output_file)
-
-    # Enregistrement en base de données
-    try:
-        save_scan_entry(args.scan_type, results)
-    except Exception as e:
-        print(f"[⚠️] Erreur lors de l'enregistrement en base : {e}")
-
-    print(f"[✅] Scan terminé. Résultats enregistrés dans {output_file} et la base de données.")
-
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
