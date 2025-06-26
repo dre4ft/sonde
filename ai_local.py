@@ -1,4 +1,7 @@
 from transformers import pipeline
+import json, re
+with open("device_patterns.json", "r", encoding="utf-8") as f:
+    DEVICE_PATTERNS = json.load(f)
 
 # 1. Instancier la pipeline zero-shot
 #    - model : distilbart-mnli-12-1
@@ -6,31 +9,55 @@ from transformers import pipeline
 classifier = pipeline(
     "zero-shot-classification",
     model="valhalla/distilbart-mnli-12-1",
-    device=-1
+    device=-1,
+    hypothesis_template="L’appareil décrit est un(e) {}."
 )
 
 # 2. Définir les labels possibles
-ROLE_LABELS = ["Endpoint", "Service", "Maintenance", "Surveillance"]
+ROLE_LABELS = [
+  "Endpoint",     # PC, laptop
+  "Smartphone",
+  "Service",      # routeur, switch, serveur
+  "Maintenance",  # imprimante
+  "Surveillance", # caméra
+  "IoT",          # thermostat, enceinte connectée…
+  "Autre"         # par défaut
+]
+
 
 def classify_roles_local(hosts):
-    """
-    Pour chaque host (chaîne descriptive), renvoie son rôle et le score associé.
-    hosts: list[str], ex: "IP=192.168.1.5, OS=Linux, ports=[22,80], services=[ssh,http]"
-    return: list[dict] avec {'host': ..., 'label': ..., 'score': ...}
-    """
     results = []
     for host in hosts:
-        out = classifier(
-            sequences=host,
-            candidate_labels=ROLE_LABELS,
-            multi_label=False  # on veut un seul rôle par machine
-        )
-        # out = {'labels': [...], 'scores':[...], ...}
-        results.append({
-            "host": host,
-            "label": out["labels"][0],
-            "score": out["scores"][0]
-        })
+        name = ""
+        m = re.search(r"hostname=([^,]+)", host)
+        if m:
+            name = m.group(1).lower()
+
+        # 1) Heuristique par patterns
+        for patt, info in DEVICE_PATTERNS.items():
+            if patt in name:
+                label = info.get("label", info.get("role"))
+                role  = info.get("role")
+                results.append({
+                    "host":  host,
+                    "label": label,    # champ "type"
+                    "role":  role,     # champ "role" large
+                    "score": 1.0
+                })
+                break
+        else:
+            # 2) Sinon IA zero-shot sur ROLE_LABELS
+            out = classifier(
+                sequences=host,
+                candidate_labels=ROLE_LABELS,
+                multi_label=False
+            )
+            results.append({
+                "host":  host,
+                "label": out["labels"][0],   # type "Autre" / "IoT" / ...
+                "role":  out["labels"][0] if out["labels"][0] in ROLE_LABELS else "Endpoint",
+                "score": out["scores"][0]
+            })
     return results
 
 

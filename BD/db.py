@@ -37,6 +37,7 @@ class Scan(Base):
     netbios   = Column(String)
     ports     = Column(String)
     role      = Column(String)
+    device_type = Column(String)
     services  = Column(Text)
     cves      = Column(Text)
 
@@ -88,7 +89,7 @@ class ServiceCVE(Base):
 # ─── Migration douce de l’ancien champ unique « scans »
 _EXPECTED = {
     "id", "timestamp", "scan_type", "ip", "os", "hostname",
-    "netbios", "ports", "role", "services", "cves",
+    "netbios", "ports", "role", "services", "cves", "device_type",
 }
 
 
@@ -127,6 +128,7 @@ def save_scan_entry(scan_type: str, hosts: List[Dict]) -> None:
             role=host.get("role", ""),
             services=json.dumps(host.get("services", []), ensure_ascii=False),
             cves=",".join(sorted(host_cves)),
+            device_type=host.get("device_type","")
         )
         session.add(scan)
         session.flush()

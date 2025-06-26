@@ -8,7 +8,6 @@ from sqlalchemy.orm import joinedload
 from datetime import datetime
 from collections import Counter
 from pymongo import MongoClient
-from pymongo import MongoClient
 
 from BD.db import init_db, Session, Scan, Service, CVE
 
@@ -75,6 +74,7 @@ def index():
         for host in data
         for svc in host.get("services", [])
     )
+    has_type     = any("type" in h or "device_type" in h for h in data)
 
     return render_template(
         "index.html",
@@ -86,7 +86,8 @@ def index():
         has_services=has_services,
         has_hostname=has_hostname,
         has_netbios=has_netbios,
-        has_cves=has_cves
+        has_cves=has_cves,
+        has_type=has_type
     )
 
 
@@ -139,7 +140,8 @@ def show_scan():
             "netbios":  scan.netbios,
             "ports":    ports_list,
             "role":     scan.role,
-            "services": []
+            "services": [],
+            "type": getattr(scan, "device_type", ""),
         }
         for svc in scan.services_rel:
             info = f"{svc.port}/{svc.name} {svc.product} {svc.version}".strip()
@@ -153,6 +155,7 @@ def show_scan():
     has_hostname = any(h["hostname"] for h in data)
     has_netbios  = any(h["netbios"]  for h in data)
     has_cves     = any(c for h in data for c in h["services"] if c["cves"])
+    has_type     = any("type" in h for h in data)
 
     return render_template(
         "index.html",
@@ -164,7 +167,8 @@ def show_scan():
         has_services=has_services,
         has_hostname=has_hostname,
         has_netbios=has_netbios,
-        has_cves=has_cves
+        has_cves=has_cves,
+        has_type=has_type
     )
 
 
@@ -205,6 +209,13 @@ def historique():
     )
     session.close()
     return render_template("historique.html", entries=entries)
+
+@app.route("/map")
+def carte():
+    # comme dans index(), on relaie les mêmes données
+    filename = "lastscan.txt"
+    # … code pour charger `data` depuis le JSON …
+    return render_template("map.html", data=data)
 
 
 @app.route("/vulns")

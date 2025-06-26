@@ -2,63 +2,127 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cartographie du réseau</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Vis.js -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <style>
-        #network {
-            width: 100%;
-            height: 600px;
-            border: 1px solid lightgray;
-        }
+        #network { width: 100%; height: 600px; border: 1px solid #dee2e6; }
+        .panel { max-height: 600px; overflow-y: auto; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .legend-color { width: 16px; height: 16px; border-radius: 50%; display: inline-block; }
     </style>
 </head>
-<body class="container">
-    <h1>Cartographie du réseau</h1>
-    <div id="network"></div>
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">Sonde Réseau</a>
+    <div class="d-flex">
+      <a href="{{ url_for('index') }}" class="btn btn-secondary me-2">🔙 Retour</a>
+    </div>
+  </div>
+</nav>
 
-    <script>
-        const nodes = new vis.DataSet([
-            { id: 0, label: "Sonde", color: "#4caf50" },
-            {% for host in data %}
-            {
-                id: {{ loop.index }},
-                label: "{{ host.ip }}\n({{ host.role or 'Inconnu' }})",
-                color: {
-                    background: 
-                    {% if host.role == 'Service' %}'#2196f3'
-                    {% elif host.role == 'Endpoint' %}'#ff9800'
-                    {% elif host.role == 'Maintenance' %}'#9c27b0'
-                    {% elif host.role == 'Surveillance' %}'#f44336'
-                    {% else %}'#9e9e9e'
-                    {% endif %}
+<div class="container-fluid mt-4">
+  <h1 class="mb-4">Cartographie du réseau</h1>
+  <div class="row">
+    <!-- Carte réseau -->
+    <div class="col-lg-9 mb-4">
+      <div id="network"></div>
+    </div>
+    <!-- Panel de détails & légende -->
+    <div class="col-lg-3">
+      <div class="card panel mb-4">
+        <div class="card-header bg-primary text-white">Détails de l'hôte</div>
+        <div class="card-body" id="host-details">
+          <p class="text-muted">Cliquez sur un nœud pour afficher les informations</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Légende</div>
+        <div class="card-body">
+          <div class="legend-item"><span class="legend-color" style="background:#4caf50;"></span> Sonde</div>
+          <div class="legend-item"><span class="legend-color" style="background:#2196f3;"></span> Service</div>
+          <div class="legend-item"><span class="legend-color" style="background:#ff9800;"></span> Endpoint</div>
+          <div class="legend-item"><span class="legend-color" style="background:#9c27b0;"></span> Maintenance</div>
+          <div class="legend-item"><span class="legend-color" style="background:#f44336;"></span> Surveillance</div>
+          <div class="legend-item"><span class="legend-color" style="background:#9e9e9e;"></span> Inconnu</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    // Préparation des données de hosts
+    const hostData = {
+        {% for host in data %}
+        {{ loop.index }}: {
+            ip: "{{ host.ip }}",
+            role: "{{ host.role or 'Inconnu' }}",
+            os: "{{ host.os }}",
+            hostname: "{{ host.hostname or '' }}",
+            ports: {{ host.ports | tojson }},
+            services: [{% for svc in host.services %}{ name: "{{ svc.name or svc.info }}", port: {{ svc.port or 'null' }}, product: "{{ svc.product }}", version: "{{ svc.version }}", cves: {{ svc.cves | tojson }} }{% if not loop.last %}, {% endif %}{% endfor %}]
+        }{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    };
+
+    // Création des nœuds et arêtes
+    const nodes = new vis.DataSet([
+        { id: 0, label: 'Sonde', color: '#4caf50', shape: 'dot', size: 24 },
+        {% for host in data %}
+        { id: {{ loop.index }}, label: '{{ host.ip }}', color: { {% if host.role == 'Service' %}background:'#2196f3'{% elif host.role == 'Endpoint' %}background:'#ff9800'{% elif host.role == 'Maintenance' %}background:'#9c27b0'{% elif host.role == 'Surveillance' %}background:'#f44336'{% else %}background:'#9e9e9e'{% endif %} }, shape: 'dot', size: 20 }{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    ]);
+
+    const edges = new vis.DataSet([
+        {% for host in data %}
+        { from: 0, to: {{ loop.index }} }{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    ]);
+
+    const container = document.getElementById('network');
+    const network = new vis.Network(container, { nodes, edges }, {
+        nodes: { font: { size: 14, color: '#fff' } },
+        edges: { arrows: { to: { enabled: true, scaleFactor: 0.5 } } },
+        physics: { stabilization: { iterations: 200 } }
+    });
+
+    // Gestion du clic pour afficher les détails
+    network.on('selectNode', function(params) {
+        const nodeId = params.nodes[0];
+        const detailsEl = document.getElementById('host-details');
+        if (nodeId === 0) {
+            detailsEl.innerHTML = '<p class="text-muted">Ceci est la sonde d\'observation.</p>';
+            return;
+        }
+        const host = hostData[nodeId];
+        let html = '<ul class="list-group list-group-flush">';
+        html += `<li class="list-group-item"><strong>IP :</strong> ${host.ip}</li>`;
+        html += `<li class="list-group-item"><strong>Rôle :</strong> ${host.role}</li>`;
+        html += `<li class="list-group-item"><strong>OS :</strong> ${host.os}</li>`;
+        if (host.hostname) html += `<li class="list-group-item"><strong>DNS :</strong> ${host.hostname}</li>`;
+        if (host.ports.length) html += `<li class="list-group-item"><strong>Ports :</strong> ${host.ports.join(', ')}</li>`;
+        if (host.services.length) {
+            html += '<li class="list-group-item"><strong>Services détectés :</strong><ul>';
+            host.services.forEach(s => {
+                html += `<li>${s.name}${s.version? ' ' + s.version: ''}`;
+                if (s.cves && s.cves.length) {
+                    html += '<br><small>CVEs : ' + s.cves.slice(0,3).join(', ') + (s.cves.length>3? '…': '') + '</small>';
                 }
-            },
-            {% endfor %}
-        ]);
+                html += '</li>';
+            });
+            html += '</ul></li>';
+        }
+        html += '</ul>';
+        detailsEl.innerHTML = html;
+    });
+</script>
 
-        const edges = new vis.DataSet([
-            {% for host in data %}
-            { from: 0, to: {{ loop.index }} },
-            {% endfor %}
-        ]);
-
-        const container = document.getElementById("network");
-        const networkData = { nodes: nodes, edges: edges };
-        const options = {
-            nodes: {
-                shape: "dot",
-                size: 20,
-                font: { size: 14, color: "#000" }
-            },
-            edges: {
-                arrows: "to"
-            },
-            physics: {
-                stabilization: false
-            }
-        };
-
-        new vis.Network(container, networkData, options);
-    </script>
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

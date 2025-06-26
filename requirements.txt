@@ -11,4 +11,4 @@ sqlalchemy
 vulners
 vulners==1.5.18
 sqlalchemy
-urllib3==1.26.16
+urllib3==1.26.16    

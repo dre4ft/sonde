@@ -226,17 +226,32 @@ def main():
 
         results.append(result)
         
-    hosts_summary = [
-    f"IP={r['ip']}, OS={r['os']}, ports={r.get('ports',[])}, services={[s['name'] for s in r.get('services',[])]}"
-    for r in results
-    ]
+    hosts_summary = []
+    for r in results: 
+        hostname = r.get("hostname","") 
+        mac_oui  = r.get("mac_oui","")           # à extraire via Nmap ou scapy 
+        ttl      = r.get("ttl","")              # idem 
+        services = [s["name"] for s in r.get("services",[])] 
+        hosts_summary.append( 
+            f"IP={r['ip']}, hostname={hostname}, OS={r['os']}, OUI={mac_oui}, TTL={ttl}, " 
+            f"ports={r.get('ports',[])}, services={services}" 
+        )
 
     # classification locale
+    few_shot = [
+    "Exemples:",
+    "IP=192.168.1.1, hostname=livebox.home, OS=Linux, OUI=00:1A:2B, TTL=64, ports=[53,80,443], services=[dns,http,https] → Service",
+    "IP=192.168.1.19, hostname=xiaomi-13t-pro.home, OS=Unknown, OUI=AA:BB:CC, TTL=128, ports=[], services=[] → Smartphone",
+    "Maintenant, pour chacun des hosts suivants, donnez-moi son rôle unique."
+    ]
+    hosts_summary = few_shot + hosts_summary
     ia_results = classify_roles_local(hosts_summary)
 
     # Fusion le label IA dans résultats
     for r, ia in zip(results, ia_results):
-        r["ia_role"]  = ia["label"]
+        r["device_type"] = ia["label"]
+        r["type"]        = ia["label"]
+        r["role"]     = ia.get("role", r["role"])
         r["ia_score"] = ia["score"]
 
     # Sauvegarde JSON
