@@ -91,6 +91,7 @@
       <a href="{{ url_for('historique') }}" class="btn btn-secondary me-2">📜 Historique complet</a>
       <a href="{{ url_for('vulns') }}" class="btn btn-warning me-2">🔓 Vulnérabilités</a>
       <a href="{{ url_for('software') }}" class="btn btn-info">🛠️ Logiciels</a>
+      <a href="{{ url_for('ai_stats') }}" class="btn btn-success me-2">🤖 Stats IA</a>
     </div>
   </div>
 </nav>
@@ -135,6 +136,10 @@
                     <input class="form-check-input" type="checkbox" name="sv" id="sv">
                     <label class="form-check-label" for="sv">Inclure -sV</label>
                 </div>
+                <div class="form-check mt-4 ms-3">
+                <input class="form-check-input" type="checkbox" name="ai" id="ai" checked>
+                <label class="form-check-label" for="ai">Classification IA</label>
+                </div>
             </div>
             <div class="col-md-2">
                 <button id="scanBtn" type="submit" class="btn btn-primary w-100">Lancer le scan</button>
@@ -163,6 +168,7 @@
                 {% if has_services %}<th>Services détectés</th>{% endif %}
                 {% if has_cves     %}<th>Vulnérabilités (CVEs)</th>{% endif %}
                 {% if has_type     %}<th>Type</th>{% endif %}
+                {% if has_ai %}<th>Confiance IA</th><th>Méthode</th>{% endif %}
                 
             </tr>
         </thead>
@@ -231,6 +237,34 @@
                     {% endif %}
                   </td>
                 {% endif %}
+                {% if has_ai %}
+                    <td>
+                        {% if host.ai_score %}
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar 
+                                    {% if host.ai_score >= 0.8 %}bg-success
+                                    {% elif host.ai_score >= 0.6 %}bg-warning
+                                    {% else %}bg-danger{% endif %}"
+                                    role="progressbar" 
+                                    style="width: {{ (host.ai_score * 100)|int }}%"
+                                    aria-valuenow="{{ (host.ai_score * 100)|int }}"
+                                    aria-valuemin="0" 
+                                    aria-valuemax="100">
+                                    {{ "%.0f"|format(host.ai_score * 100) }}%
+                                </div>
+                            </div>
+                        {% else %}
+                            <em>—</em>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if host.ai_method %}
+                            <span class="badge bg-info">{{ host.ai_method }}</span>
+                        {% else %}
+                            <em>—</em>
+                        {% endif %}
+                    </td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>
@@ -285,6 +319,56 @@
                     <div class="stat-label">Assets critiques</div>
                 </div>
             </div>
+            {% if has_ai %}
+            <div class="stats-row mt-4">
+                <h5 class="mb-3">📊 Statistiques IA</h5>
+                <div class="row">
+                    {% set type_counts = {} %}
+                    {% set total_confidence = 0 %}
+                    {% set ai_count = 0 %}
+                    
+                    {% for host in data %}
+                        {% if host.device_type %}
+                            {% if host.device_type not in type_counts %}
+                                {% set _ = type_counts.update({host.device_type: 0}) %}
+                            {% endif %}
+                            {% set _ = type_counts.update({host.device_type: type_counts[host.device_type] + 1}) %}
+                        {% endif %}
+                        {% if host.ai_score %}
+                            {% set total_confidence = total_confidence + host.ai_score %}
+                            {% set ai_count = ai_count + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <div class="stat-number">{{ ai_count }}</div>
+                            <div class="stat-label">Équipements classifiés</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <div class="stat-number">
+                                {% if ai_count > 0 %}
+                                    {{ "%.0f"|format((total_confidence / ai_count) * 100) }}%
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </div>
+                            <div class="stat-label">Confiance moyenne</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="stat-item">
+                            <div class="stat-label mb-2">Types détectés :</div>
+                            {% for type, count in type_counts.items() %}
+                                <span class="badge bg-secondary me-1">{{ type }} ({{ count }})</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -394,14 +478,15 @@
         {% endfor %}
         {
             id: {{ host_id }},
-            label: '{{ host.ip }}\n{{ host.get("type", host.get("role", "Inconnu")) }}',
+            label: '{{ host.ip }}\n{{ host.device_type or host.get("type", host.get("role", "Inconnu")) }}',
             shape: 'dot',
             size: {% if vuln_count > 5 %}25{% elif vuln_count > 0 %}20{% else %}15{% endif %},
             color: getRoleColor('{{ host.get("role", "Inconnu") }}'),
             font: { size: 12, color: '#000' },
             title: `IP: {{ host.ip }}
                     OS: {{ host.get('os', 'Inconnu') }}
-                    Type: {{ host.get('type', host.get('role','Inconnu')) }}
+                    Type IA: {{ host.device_type or 'Non classifié' }}
+                    {% if host.ai_score %}Confiance: {{ "%.0f"|format(host.ai_score * 100) }}%{% endif %}
                     Rôle: {{ host.get('role', 'Inconnu') }}
                     {% if host.get('ports') %}Ports: {{ host.ports|join(', ') }}{% endif %}
                     {% if vuln_count > 0 %}⚠️ {{ vuln_count }} vulnérabilité(s){% endif %}`,

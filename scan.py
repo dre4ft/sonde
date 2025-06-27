@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-scan.py — Découverte réseau (Nmap) + corrélation CVE 100 % locale.
+scan.py — Découverte réseau (Nmap) + corrélation CVE locale + Classification IA hybride
 
 Dépendances :
   sudo apt install nmap
-  pip install python-nmap pymongo packaging rapidfuzz
+  pip install python-nmap pymongo packaging rapidfuzz transformers torch
   MongoDB « cvedb » rempli par cve-search / CveXplore
   SQLite initialisé via BD/db.py
 
-© 2025
+© 2025
 """
 from __future__ import annotations
 import argparse, json, os, re, sys
@@ -17,7 +17,9 @@ import nmap
 from pymongo import MongoClient
 from packaging.version import Version, InvalidVersion
 from rapidfuzz import process, fuzz
-from BD.db import init_db, save_scan_entry  # historique
+from BD.db import init_db, save_scan_entry
+from ai_local import classify_scan_results  # Import de notre nouveau système
+
 # Initialisation de la base avant toute opération de scan
 init_db()
 
@@ -39,6 +41,7 @@ def nmap_args(profile: str, want_cve: bool) -> str:
         case _:           return "-O -T4"
 
 def categorize(ports: List[int], osn: str) -> str:
+    """Catégorisation de base (sera remplacée par l'IA)"""
     osn_low = osn.lower()
     pset = set(ports)
     if 554 in pset or "camera" in osn_low: return "Surveillance"
@@ -145,11 +148,12 @@ class LocalCVE:
 
 # ─── Programme principal ───────────────────────────────────────────────────────
 def main() -> None:
-    pa = argparse.ArgumentParser("Scan réseau + CVE locales")
+    pa = argparse.ArgumentParser("Scan réseau + CVE locales + IA hybride")
     pa.add_argument("scan_type", choices=["quick","standard","deep"])
     pa.add_argument("target",    help="IP ou CIDR (ex : 192.168.1.0/24)")
     pa.add_argument("-p","--ports", help="Ports Nmap (ex : 80,8080)", default=None)
-    pa.add_argument("-v","--vuln",  action="store_true")
+    pa.add_argument("-v","--vuln",  action="store_true", help="Activer recherche CVE")
+    pa.add_argument("-a","--ai",    action="store_true", help="Activer classification IA", default=True)
     pa.add_argument("-d","--debug", action="store_true")
     a = pa.parse_args()
 
@@ -165,11 +169,14 @@ def main() -> None:
     if a.ports: arg += f" -p {a.ports}"
     scan_args = f"{arg} --host-timeout 2m"
     print(f"[🔍] Scan {a.scan_type} sur {a.target} (args : {scan_args})")
-    print("[📡] Hôtes :", ", ".join(live))
+    print(f"[📡] Hôtes : {', '.join(live)}")
+    print(f"[🤖] Classification IA : {'Activée' if a.ai else 'Désactivée'}")
+    
     nm2.scan(hosts=" ".join(live), arguments=scan_args)
 
     cdb = LocalCVE() if a.vuln else None
     res: List[Dict[str,Any]] = []
+    
     for ip in nm2.all_hosts():
         n = nm2[ip]; r = {"ip":ip}
         if n.get("hostnames"): r["hostname"] = n["hostnames"][0]["name"]
@@ -177,18 +184,21 @@ def main() -> None:
         if a.scan_type=="quick":
             for s in n.get("hostscript",[]):
                 if s["id"]=="nbstat": r["netbios"]=s["output"]
+            # Catégorisation basique pour quick scan
+            r["os"] = "Unknown"
+            r["role"] = "Endpoint"
             res.append(r); continue
 
         ports = list(n.get("tcp",{}).keys()); r["ports"]=ports
         osm   = n.get("osmatch") or []
         osn   = osm[0].get("name","Unknown") if osm else "Unknown"
         r["os"]   = osn
+        
+        # Catégorisation de base (sera affinée par l'IA)
         r["role"] = categorize(ports,osn)
 
         sv: List[Dict[str,Any]] = []
-        # Affichage des services détectés (port, produit, version)
-        # Affichage des services détectés (port, produit, version)
-        print(f"[SERV] {ip}:")
+        print(f"\n[SCAN] {ip}:")
         for p in ports:
             d = n["tcp"][p]
             prod = d.get("product","")
@@ -196,7 +206,7 @@ def main() -> None:
             name = d.get("name","")
             cves = cdb.cves_for(prod,ver) if cdb else []
             if a.debug:
-                print(f"[DBG] {ip}:{p:<5} {prod or name} {ver} → {len(cves)} CVE")
+                print(f"  Port {p:<5} : {name:<15} {prod:<20} {ver:<15} → {len(cves)} CVE")
             # Champ 'info' pour l'affichage
             info = f"{prod or name} {ver}".strip()
             sv.append({
@@ -210,11 +220,26 @@ def main() -> None:
         r["services"] = sv
         res.append(r)
 
+    # Classification IA hybride
+    if a.ai:
+        print("\n[🤖] Application de la classification IA hybride...")
+        res = classify_scan_results(res)
+        
+        # Affichage des résultats IA
+        print("\n[📊] Résultats de classification :")
+        for r in res:
+            ai_type = r.get("device_type", r.get("type", "?"))
+            ai_score = r.get("ai_score", 0)
+            print(f"  {r['ip']:<15} → {ai_type:<20} (confiance: {ai_score:.2%})")
+
     out = {"quick":"resultatrapide.json","standard":"resultatmoyen.json","deep":"resultatapprofondie.json"}[a.scan_type]
     json.dump(res, open(out,"w"), indent=4,ensure_ascii=False)
     open("lastscan.txt","w").write(out)
-    try: save_scan_entry(a.scan_type,res)
-    except Exception as e: print(f"[⚠️] DB : {e}")
-    print(f"[✅] Scan terminé → {out}")
+    
+    try: 
+        save_scan_entry(a.scan_type,res)
+        print(f"\n[✅] Scan terminé → {out} (BD mise à jour)")
+    except Exception as e: 
+        print(f"[⚠️] DB : {e}")
 
 if __name__ == "__main__": main()

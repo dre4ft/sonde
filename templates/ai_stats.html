@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Statistiques IA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    .stats-number {
+        font-size: 3rem;
+        font-weight: bold;
+        color: #495057;
+    }
+    .stats-label {
+        font-size: 1.1rem;
+        color: #6c757d;
+        margin-top: 10px;
+    }
+    .type-distribution {
+        margin-top: 30px;
+    }
+    .confidence-chart {
+        height: 400px;
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">🤖 Statistiques de Classification IA</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="stats-card">
+            <div class="stats-number">{{ total_classified }}</div>
+            <div class="stats-label">Équipements classifiés</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stats-card">
+            <div class="stats-number">{{ type_counts|length }}</div>
+            <div class="stats-label">Types différents détectés</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stats-card">
+            <div class="stats-number">
+                {% set total_conf = avg_confidence.values() | sum %}
+                {% set avg = (total_conf / avg_confidence|length * 100) if avg_confidence else 0 %}
+                {{ "%.0f"|format(avg) }}%
+            </div>
+            <div class="stats-label">Confiance moyenne globale</div>
+        </div>
+    </div>
+</div>
+
+<div class="row type-distribution">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Distribution des types d'équipements</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="typeChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Confiance moyenne par type</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="confidenceChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">Détails par type d'équipement</h5>
+    </div>
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Nombre</th>
+                    <th>Pourcentage</th>
+                    <th>Confiance moyenne</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dtype, count in type_counts.items() %}
+                <tr>
+                    <td>
+                        <span class="badge bg-primary">{{ dtype }}</span>
+                    </td>
+                    <td>{{ count }}</td>
+                    <td>{{ "%.1f"|format(count / total_classified * 100) }}%</td>
+                    <td>
+                        <div class="progress" style="width: 100px;">
+                            <div class="progress-bar 
+                                {% if avg_confidence[dtype] >= 0.8 %}bg-success
+                                {% elif avg_confidence[dtype] >= 0.6 %}bg-warning
+                                {% else %}bg-danger{% endif %}"
+                                style="width: {{ (avg_confidence[dtype] * 100)|int }}%">
+                                {{ "%.0f"|format(avg_confidence[dtype] * 100) }}%
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        {% if dtype == "Endpoint" %}Postes utilisateurs
+                        {% elif dtype == "Service" %}Serveurs et services
+                        {% elif dtype == "Smartphone" %}Appareils mobiles
+                        {% elif dtype == "IoT" %}Objets connectés
+                        {% elif dtype == "Surveillance" %}Caméras et sécurité
+                        {% elif dtype == "Maintenance" %}Imprimantes et équipements
+                        {% elif dtype == "Database" %}Serveurs de base de données
+                        {% elif dtype == "Web service" %}Serveurs web
+                        {% elif dtype == "Remote access" %}Accès distant
+                        {% elif dtype == "Mail service" %}Serveurs de messagerie
+                        {% elif dtype == "DNS" %}Serveurs DNS
+                        {% else %}{{ dtype }}{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">À propos de la classification IA</h5>
+    </div>
+    <div class="card-body">
+        <p>La classification utilise une approche <strong>hybride multi-méthodes</strong> :</p>
+        <ul>
+            <li><strong>Patterns (35%) :</strong> Reconnaissance de motifs dans les noms d'hôtes et constructeurs</li>
+            <li><strong>Services (30%) :</strong> Analyse des services détectés (HTTP, SSH, MySQL, etc.)</li>
+            <li><strong>Ports (15%) :</strong> Classification basée sur les ports ouverts</li>
+            <li><strong>Zero-shot IA (15%) :</strong> Modèle DistilBART pour classification contextuelle</li>
+            <li><strong>OS (5%) :</strong> Indices basés sur le système d'exploitation détecté</li>
+        </ul>
+        <p>Le score de confiance final est une moyenne pondérée de toutes ces méthodes.</p>
+    </div>
+</div>
+
+<script>
+// Graphique de distribution des types
+const typeCtx = document.getElementById('typeChart').getContext('2d');
+new Chart(typeCtx, {
+    type: 'doughnut',
+    data: {
+        labels: {{ type_counts.keys() | list | tojson }},
+        datasets: [{
+            data: {{ type_counts.values() | list | tojson }},
+            backgroundColor: [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
+                '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',
+                '#4BC0C0', '#36A2EB', '#FFCE56'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'right',
+            },
+            title: {
+                display: false
+            }
+        }
+    }
+});
+
+// Graphique de confiance par type
+const confCtx = document.getElementById('confidenceChart').getContext('2d');
+new Chart(confCtx, {
+    type: 'bar',
+    data: {
+        labels: {{ avg_confidence.keys() | list | tojson }},
+        datasets: [{
+            label: 'Confiance moyenne (%)',
+            data: {{ [v * 100 for v in avg_confidence.values()] | tojson }},
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                    callback: function(value) {
+                        return value + '%';
+                    }
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

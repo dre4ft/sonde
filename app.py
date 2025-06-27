@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload
 from datetime import datetime
 from collections import Counter
 from pymongo import MongoClient
+from ai_local import classify_scan_results
 
 from BD.db import init_db, Session, Scan, Service, CVE
 
@@ -75,6 +76,7 @@ def index():
         for svc in host.get("services", [])
     )
     has_type     = any("type" in h or "device_type" in h for h in data)
+    has_ai = any("ai_score" in h for h in data)
 
     return render_template(
         "index.html",
@@ -87,7 +89,8 @@ def index():
         has_hostname=has_hostname,
         has_netbios=has_netbios,
         has_cves=has_cves,
-        has_type=has_type
+        has_type=has_type,
+        has_ai=has_ai
     )
 
 
@@ -177,6 +180,7 @@ def scan():
     scan_type = request.form.get("scan_type", "standard")
     target_ip = request.form.get("target_ip", "192.168.1.0/24")
     include_sv = request.form.get("sv") == "on"
+    include_ai = request.form.get("ai") == "on"
     vulners_key = os.environ.get("VULNERS_API_KEY", "")
 
     cmd = [
@@ -188,6 +192,8 @@ def scan():
     ]
     if include_sv:
         cmd.insert(5, "-v")
+    if include_ai:
+        cmd.insert(5, "-a")
 
     try:
         subprocess.run(cmd, check=True)
@@ -323,6 +329,45 @@ def software():
     softwares = list(db["software_logs"].find().sort("timestamp", -1))
     return render_template("software.html", softwares=softwares)
     
+@app.route("/ai_stats")
+def ai_stats():
+    """Statistiques sur les classifications IA"""
+    session = Session()
+    
+    # Récupérer tous les scans avec classification IA
+    scans = session.query(Scan).filter(
+        Scan.device_type.isnot(None)
+    ).all()
+    
+    # Calculer les stats
+    type_counts = {}
+    confidence_by_type = {}
+    
+    for scan in scans:
+        device_type = scan.device_type or "Unknown"
+        ai_score = float(scan.ai_score) if hasattr(scan, 'ai_score') else 0.5
+        
+        if device_type not in type_counts:
+            type_counts[device_type] = 0
+            confidence_by_type[device_type] = []
+        
+        type_counts[device_type] += 1
+        confidence_by_type[device_type].append(ai_score)
+    
+    # Moyennes de confiance
+    avg_confidence = {}
+    for dtype, scores in confidence_by_type.items():
+        avg_confidence[dtype] = sum(scores) / len(scores) if scores else 0
+    
+    session.close()
+    
+    return render_template(
+        "ai_stats.html",
+        type_counts=type_counts,
+        avg_confidence=avg_confidence,
+        total_classified=sum(type_counts.values())
+    )
+
 if __name__ == "__main__":
     init_db()
     app.run(host="0.0.0.0", port=5000)
