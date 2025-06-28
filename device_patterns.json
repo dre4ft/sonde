@@ -1,0 +1,396 @@
+{
+  "livebox": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Box Orange/Livebox"
+  },
+  "freebox": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Box Free"
+  },
+  "bbox": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Box Bouygues"
+  },
+  "sfr": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Box SFR"
+  },
+  
+  "iphone": {
+    "label": "Smartphone",
+    "role": "Smartphone",
+    "confidence": 0.98,
+    "description": "Apple iPhone"
+  },
+  "ipad": {
+    "label": "Smartphone",
+    "role": "Smartphone",
+    "confidence": 0.98,
+    "description": "Apple iPad"
+  },
+  "galaxy": {
+    "label": "Smartphone",
+    "role": "Smartphone",
+    "confidence": 0.95,
+    "description": "Samsung Galaxy"
+  },
+  "xiaomi": {
+    "label": "Smartphone",
+    "role": "Smartphone",
+    "confidence": 0.95,
+    "description": "Xiaomi Phone"
+  },
+  "huawei": {
+    "label": "Smartphone",
+    "role": "Smartphone",
+    "confidence": 0.95,
+    "description": "Huawei Device"
+  },
+  "oneplus": {
+    "label": "Smartphone",
+    "role": "Smartphone",
+    "confidence": 0.95,
+    "description": "OnePlus Phone"
+  },
+  "pixel": {
+    "label": "Smartphone",
+    "role": "Smartphone",
+    "confidence": 0.95,
+    "description": "Google Pixel"
+  },
+  
+  "desktop": {
+    "label": "Endpoint",
+    "role": "Endpoint",
+    "confidence": 0.9,
+    "description": "PC de bureau"
+  },
+  "laptop": {
+    "label": "Endpoint",
+    "role": "Endpoint",
+    "confidence": 0.9,
+    "description": "Ordinateur portable"
+  },
+  "macbook": {
+    "label": "Endpoint",
+    "role": "Endpoint",
+    "confidence": 0.95,
+    "description": "Apple MacBook"
+  },
+  "imac": {
+    "label": "Endpoint",
+    "role": "Endpoint",
+    "confidence": 0.95,
+    "description": "Apple iMac"
+  },
+  "thinkpad": {
+    "label": "Endpoint",
+    "role": "Endpoint",
+    "confidence": 0.9,
+    "description": "Lenovo ThinkPad"
+  },
+  "elitebook": {
+    "label": "Endpoint",
+    "role": "Endpoint",
+    "confidence": 0.9,
+    "description": "HP EliteBook"
+  },
+  
+  "printer": {
+    "label": "Maintenance",
+    "role": "Maintenance",
+    "confidence": 0.98,
+    "description": "Imprimante"
+  },
+  "laserjet": {
+    "label": "Maintenance",
+    "role": "Maintenance",
+    "confidence": 0.98,
+    "description": "HP LaserJet"
+  },
+  "officejet": {
+    "label": "Maintenance",
+    "role": "Maintenance",
+    "confidence": 0.98,
+    "description": "HP OfficeJet"
+  },
+  "epson": {
+    "label": "Maintenance",
+    "role": "Maintenance",
+    "confidence": 0.95,
+    "description": "Epson Printer"
+  },
+  "canon": {
+    "label": "Maintenance",
+    "role": "Maintenance",
+    "confidence": 0.95,
+    "description": "Canon Printer"
+  },
+  "brother": {
+    "label": "Maintenance",
+    "role": "Maintenance",
+    "confidence": 0.95,
+    "description": "Brother Printer"
+  },
+  
+  "camera": {
+    "label": "Surveillance",
+    "role": "Surveillance",
+    "confidence": 0.98,
+    "description": "Caméra IP"
+  },
+  "cam": {
+    "label": "Surveillance",
+    "role": "Surveillance",
+    "confidence": 0.95,
+    "description": "Caméra"
+  },
+  "hikvision": {
+    "label": "Surveillance",
+    "role": "Surveillance",
+    "confidence": 0.98,
+    "description": "Hikvision Camera"
+  },
+  "dahua": {
+    "label": "Surveillance",
+    "role": "Surveillance",
+    "confidence": 0.98,
+    "description": "Dahua Camera"
+  },
+  "axis": {
+    "label": "Surveillance",
+    "role": "Surveillance",
+    "confidence": 0.98,
+    "description": "Axis Camera"
+  },
+  "dvr": {
+    "label": "Surveillance",
+    "role": "Surveillance",
+    "confidence": 0.95,
+    "description": "Digital Video Recorder"
+  },
+  "nvr": {
+    "label": "Surveillance",
+    "role": "Surveillance",
+    "confidence": 0.95,
+    "description": "Network Video Recorder"
+  },
+  
+  "srv": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.9,
+    "description": "Serveur"
+  },
+  "server": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.9,
+    "description": "Serveur"
+  },
+  "esxi": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "VMware ESXi"
+  },
+  "proxmox": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Proxmox VE"
+  },
+  "nas": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Network Attached Storage"
+  },
+  "synology": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Synology NAS"
+  },
+  "qnap": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "QNAP NAS"
+  },
+  
+  "switch": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Switch réseau"
+  },
+  "cisco": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.9,
+    "description": "Cisco Equipment"
+  },
+  "aruba": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.9,
+    "description": "Aruba Networks"
+  },
+  "ubiquiti": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.9,
+    "description": "Ubiquiti Networks"
+  },
+  "unifi": {
+    "label": "Service",
+    "role": "Service",
+    "confidence": 0.9,
+    "description": "UniFi Equipment"
+  },
+  
+  "alexa": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Amazon Alexa"
+  },
+  "echo": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Amazon Echo"
+  },
+  "google-home": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Google Home"
+  },
+  "nest": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Google Nest"
+  },
+  "hue": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Philips Hue"
+  },
+  "sonos": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Sonos Speaker"
+  },
+  "chromecast": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Google Chromecast"
+  },
+  "roku": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Roku Device"
+  },
+  "firetv": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Amazon Fire TV"
+  },
+  "appletv": {
+    "label": "IoT",
+    "role": "IoT",
+    "confidence": 0.95,
+    "description": "Apple TV"
+  },
+  
+  "db": {
+    "label": "Database",
+    "role": "Service",
+    "confidence": 0.9,
+    "description": "Database Server"
+  },
+  "mysql": {
+    "label": "Database",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "MySQL Server"
+  },
+  "postgres": {
+    "label": "Database",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "PostgreSQL Server"
+  },
+  "mongo": {
+    "label": "Database",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "MongoDB Server"
+  },
+  "redis": {
+    "label": "Database",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Redis Server"
+  },
+  
+  "mail": {
+    "label": "Mail service",
+    "role": "Service",
+    "confidence": 0.9,
+    "description": "Mail Server"
+  },
+  "exchange": {
+    "label": "Mail service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Microsoft Exchange"
+  },
+  "zimbra": {
+    "label": "Mail service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Zimbra Mail"
+  },
+  
+  "web": {
+    "label": "Web service",
+    "role": "Service",
+    "confidence": 0.85,
+    "description": "Web Server"
+  },
+  "nginx": {
+    "label": "Web service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Nginx Server"
+  },
+  "apache": {
+    "label": "Web service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "Apache Server"
+  },
+  "iis": {
+    "label": "Web service",
+    "role": "Service",
+    "confidence": 0.95,
+    "description": "IIS Server"
+  }
+}

@@ -18,7 +18,7 @@ from pymongo import MongoClient
 from packaging.version import Version, InvalidVersion
 from rapidfuzz import process, fuzz
 from BD.scan_db import init_db, save_scan_entry
-from ai_local import classify_scan_results  # Import de notre nouveau système
+from ai_local import classify_scan_results
 
 # Initialisation de la base avant toute opération de scan
 init_db()
