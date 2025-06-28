@@ -324,34 +324,36 @@
             <div class="stats-row mt-4">
                 <h5 class="mb-3">📊 Statistiques IA</h5>
                 <div class="row">
-                    {% set type_counts = {} %}
-                    {% set total_confidence = 0 %}
-                    {% set ai_count = 0 %}
-                    
-                    {% for host in data %}
-                        {% if host.device_type %}
-                            {% if host.device_type not in type_counts %}
-                                {% set _ = type_counts.update({host.device_type: 0}) %}
-                            {% endif %}
-                            {% set _ = type_counts.update({host.device_type: type_counts[host.device_type] + 1}) %}
-                        {% endif %}
-                        {% if host.ai_score %}
-                            {% set total_confidence = total_confidence + host.ai_score %}
-                            {% set ai_count = ai_count + 1 %}
-                        {% endif %}
+                    {#– persistent accumulator –#}
+                    {% set ns = namespace(type_counts = {}, total_conf = 0.0, ai_cnt = 0) %} 
+ 
+                    {% for host in data %} 
+                        {# accept either .device_type or .type #} 
+                        {% set d_type = host.device_type or host.type %} 
+                        {% if d_type %} 
+                            {% set _ = ns.type_counts.__setitem__( 
+                                d_type, 
+                                ns.type_counts.get(d_type, 0) + 1) %} 
+                        {% endif %} 
+ 
+                        {# count every host that actually carries a numeric score #} 
+                        {% if host.ai_score is not none %} 
+                            {% set ns.total_conf = ns.total_conf + host.ai_score|float %} 
+                            {% set ns.ai_cnt     = ns.ai_cnt + 1 %} 
+                        {% endif %} 
                     {% endfor %}
                     
                     <div class="col-md-3">
                         <div class="stat-item">
-                            <div class="stat-number">{{ ai_count }}</div>
+                            <div class="stat-number">{{ ns.ai_cnt }}</div>
                             <div class="stat-label">Équipements classifiés</div>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="stat-item">
                             <div class="stat-number">
-                                {% if ai_count > 0 %}
-                                    {{ "%.0f"|format((total_confidence / ai_count) * 100) }}%
+                                {% if ns.ai_cnt > 0 %}
+                                    {{ "%.0f"|format((ns.total_conf / ns.ai_cnt) * 100) }}%
                                 {% else %}
                                     —
                                 {% endif %}
@@ -362,7 +364,7 @@
                     <div class="col-md-6">
                         <div class="stat-item">
                             <div class="stat-label mb-2">Types détectés :</div>
-                            {% for type, count in type_counts.items() %}
+                            {% for type, count in ns.type_counts.items() %}
                                 <span class="badge bg-secondary me-1">{{ type }} ({{ count }})</span>
                             {% endfor %}
                         </div>

@@ -51,9 +51,7 @@
     <div class="col-md-4">
         <div class="stats-card">
             <div class="stats-number">
-                {% set total_conf = avg_confidence.values() | sum %}
-                {% set avg = (total_conf / avg_confidence|length * 100) if avg_confidence else 0 %}
-                {{ "%.0f"|format(avg) }}%
+                {{ "%.1f"|format(global_avg) }}%
             </div>
             <div class="stats-label">Confiance moyenne globale</div>
         </div>

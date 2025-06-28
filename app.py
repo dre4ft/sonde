@@ -361,15 +361,29 @@ def software():
     softwares = list(db["software_logs"].find().sort("timestamp", -1))
     return render_template("software.html", softwares=softwares)
     
-@app.route("/ai_stats")
-def ai_stats():
-    """Statistiques sur les classifications IA"""
-    session = Session()
-    
-    # Récupérer tous les scans avec classification IA
-    scans = session.query(Scan).filter(
-        Scan.device_type.isnot(None)
-    ).all()
+@app.route("/ai_stats") 
+def ai_stats(): 
+    """ 
+    Statistiques sur les classifications IA. 
+    Par défaut on affiche le scan le plus récent, 
+    ou celui passé en GET ?scan_time=YYYY-mm-dd HH:MM:SS. 
+    """ 
+    session = Session() 
+ 
+    # --- 1. quel scan veut-on ? -------------------------------------------- 
+    from sqlalchemy import func 
+    scan_time = request.args.get("scan_time") 
+    base_q = session.query(Scan).filter(Scan.device_type.isnot(None)) 
+ 
+    if scan_time: 
+        base_q = base_q.filter( 
+            func.strftime('%Y-%m-%d %H:%M:%S', Scan.timestamp) == scan_time 
+        ) 
+    else: 
+        latest_ts = session.query(func.max(Scan.timestamp)).scalar() 
+        base_q = base_q.filter(Scan.timestamp == latest_ts) 
+ 
+    scans = base_q.all()
     
     # Calculer les stats
     type_counts = {}
@@ -377,20 +391,20 @@ def ai_stats():
     
     for scan in scans:
         device_type = scan.device_type or "Unknown"
-        # Récupérer ai_score depuis la base si disponible
-        ai_score = 0.5  # Valeur par défaut
-        if hasattr(scan, 'ai_score') and scan.ai_score:
-            try:
-                ai_score = float(scan.ai_score)
-            except (ValueError, TypeError):
-                ai_score = 0.5
+        # Score : on ignore les None, on accepte 0.0 comme valeur valide
+        raw_score = getattr(scan, "ai_score", None) 
+        try: 
+            ai_score = float(raw_score) if raw_score is not None else None 
+        except (ValueError, TypeError): 
+            ai_score = None        # n'entre pas dans les stats
         
         if device_type not in type_counts:
             type_counts[device_type] = 0
             confidence_by_type[device_type] = []
         
         type_counts[device_type] += 1
-        confidence_by_type[device_type].append(ai_score)
+        if ai_score is not None:
+            confidence_by_type[device_type].append(ai_score)
     
     # Moyennes de confiance
     avg_confidence = {}
