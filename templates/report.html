@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Rapport de scan réseau</title>
+  <style>
+    /* ===== Style global du PDF ===== */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 1cm;
+      font-size: 12px;
+    }
+    h1, h2 {
+      margin-bottom: 0.3em;
+    }
+
+    /* ===== Tableau hôtes ===== */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1em;
+      table-layout: fixed; /* fixe les largeurs de colonnes */
+      word-wrap: break-word;
+    }
+    thead {
+      background-color: #333;
+      color: #fff;
+    }
+    th, td {
+      border: 1px solid #666;
+      padding: 4px 6px;
+      vertical-align: top;
+    }
+    th {
+      font-size: 11px;
+      text-align: left;
+    }
+
+    /* Donnez des proportions aux colonnes */
+    .col-ip       { width: 15%; }
+    .col-os       { width: 15%; }
+    .col-hostname { width: 20%; }
+    .col-ports    { width: 10%; }
+    .col-role     { width: 10%; }
+    .col-services { width: 20%; }
+    .col-cves     { width: 10%; }
+
+    /* Éviter de scinder une ligne sur deux pages */
+    tr {
+      page-break-inside: avoid;
+    }
+    thead {
+      display: table-header-group;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rapport de scan réseau</h1>
+  <p><strong>Date du scan :</strong> {{ scan_time }}</p>
+
+  <h2>1. Hôtes détectés</h2>
+  <table>
+    <thead>
+      <tr>
+        <th class="col-ip">IP</th>
+        <th class="col-os">OS</th>
+        <th class="col-hostname">Nom DNS</th>
+        <th class="col-ports">Ports</th>
+        <th class="col-role">Rôle</th>
+        <th class="col-services">Services détectés</th>
+        <th class="col-cves">Vulnérabilités (CVEs)</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for host in hosts %}
+      <tr>
+        <td class="col-ip">{{ host.ip }}</td>
+        <td class="col-os">{{ host.os }}</td>
+        <td class="col-hostname">{{ host.hostname or '—' }}</td>
+        <td class="col-ports">{{ host.ports|join(', ') or '—' }}</td>
+        <td class="col-role">{{ host.role }}</td>
+        <td class="col-services">
+          {% if host.services %}
+            {% for svc in host.services %}
+              <div>{{ svc.info }}</div>
+            {% endfor %}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td class="col-cves">
+          {% if host.services %}
+            {% for svc in host.services %}
+              {% for c in svc.cves %}
+                <div>{{ c }}</div>
+              {% endfor %}
+            {% endfor %}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>2. Vulnérabilités détectées</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>CVE</th>
+        <th>Occurrences</th>
+        <th>Hôtes affectés</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for v in vulns %}
+      <tr>
+        <td>{{ v.cve }}</td>
+        <td>{{ v.count }}</td>
+        <td>{{ v.hosts|join(', ') }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <footer style="font-size:10px; text-align:center; margin-top:2cm;">
+    Généré automatiquement par Sonde Réseau
+  </footer>
+</body>
+</html>

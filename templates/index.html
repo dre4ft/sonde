@@ -116,6 +116,20 @@
         <button type="submit" class="btn btn-info w-100">Afficher le scan</button>
       </div>
     </form>
+    <form class="d-flex mb-4" style="align-items: flex-end;" method="get" action="{{ url_for('download_report') }}">
+  <div class="me-3">
+    <label for="report_scan_time" class="form-label mb-1">Scan à exporter</label><br>
+    <select id="report_scan_time" name="scan_time" class="form-select" style="height: 38px; line-height: 1.2;">
+      {% for ts in history %}
+        <option value="{{ ts }}">{{ ts }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-outline-primary" style="height: 38px;">Exporter PDF</button>
+</form>
+
+
+
 
     <!-- FORMULAIRE DE SCAN -->
     <form method="POST" action="/scan" class="mb-4">
