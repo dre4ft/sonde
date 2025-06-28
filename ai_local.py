@@ -14,11 +14,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Chargement des patterns
+import os
+PATTERNS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "device_patterns.json")
 try:
-    with open("device_patterns.json", "r", encoding="utf-8") as f:
+    with open(PATTERNS_FILE, "r", encoding="utf-8") as f:
         DEVICE_PATTERNS = json.load(f)
+    logger.info(f"Chargé {len(DEVICE_PATTERNS)} patterns depuis {PATTERNS_FILE}")
 except FileNotFoundError:
-    logger.warning("device_patterns.json non trouvé, utilisation patterns par défaut")
+    logger.warning(f"device_patterns.json non trouvé à {PATTERNS_FILE}, utilisation patterns par défaut")
     DEVICE_PATTERNS = {}
 
 # Pipeline zero-shot
@@ -139,10 +142,10 @@ PORT_ROLE_MAP = {
 class HybridClassifier:
     def __init__(self):
         self.weights = {
-            "pattern": 0.35,      # Patterns explicites
-            "service": 0.30,      # Services détectés
+            "pattern": 0.40,      # Patterns explicites
+            "service": 0.35,      # Services détectés
             "port": 0.15,         # Ports ouverts
-            "zero_shot": 0.15,    # IA zero-shot
+            "zero_shot": 0.05,    # IA zero-shot
             "os": 0.05            # OS détecté
         }
     
@@ -257,6 +260,10 @@ class HybridClassifier:
         """Classification basée sur les ports ouverts"""
         ports_str = info.get("ports", [])
         if not ports_str:
+            # Si pas de ports mais hostname reconnu comme box/routeur
+            hostname = info.get("hostname", "").lower()
+            if any(box in hostname for box in ["livebox", "freebox", "bbox", "sfr"]):
+                return ("Service", 0.8)
             return ("Autre", 0.0)
         
         # Conversion en int
@@ -362,17 +369,27 @@ class HybridClassifier:
         
         # Calcul du score pondéré pour chaque rôle
         role_scores = {}
+        total_weights = {}
+        
         for method, (role, score) in results.items():
-            if role != "Autre" or score > 0:
+            # Ne considérer que les méthodes qui ont vraiment contribué
+            if score > 0.1:  # Seuil minimal pour considérer une contribution
                 weight = self.weights[method]
                 if role not in role_scores:
                     role_scores[role] = 0
+                    total_weights[role] = 0
                 role_scores[role] += score * weight
+                total_weights[role] += weight
+        
+        # Normaliser les scores par rapport aux poids réellement utilisés
+        for role in role_scores:
+            if total_weights[role] > 0:
+                role_scores[role] = role_scores[role] / total_weights[role]
         
         # Sélection du meilleur rôle
         if not role_scores:
             best_role = "Endpoint"
-            best_score = 0.3
+            best_score = 0.5
         else:
             best_role = max(role_scores.items(), key=lambda x: x[1])
             best_role, best_score = best_role[0], best_role[1]
@@ -410,19 +427,28 @@ class HybridClassifier:
             "zero_shot": ("Autre", 0.0)  # Skip zero-shot pour les dicts
         }
         
-        # Calcul du score pondéré
+        # Calcul du score pondéré avec normalisation
         role_scores = {}
+        total_weights = {}
+        
         for method, (role, score) in results.items():
-            if role != "Autre" or score > 0:
+            if score > 0.1:  # Seuil minimal
                 weight = self.weights[method]
                 if role not in role_scores:
                     role_scores[role] = 0
+                    total_weights[role] = 0
                 role_scores[role] += score * weight
+                total_weights[role] += weight
+        
+        # Normaliser les scores
+        for role in role_scores:
+            if total_weights[role] > 0:
+                role_scores[role] = role_scores[role] / total_weights[role]
         
         # Sélection du meilleur rôle
         if not role_scores:
             best_role = "Endpoint"
-            best_score = 0.3
+            best_score = 0.5
         else:
             best_role = max(role_scores.items(), key=lambda x: x[1])
             best_role, best_score = best_role[0], best_role[1]

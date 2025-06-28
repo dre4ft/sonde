@@ -192,7 +192,7 @@ new Chart(confCtx, {
         labels: {{ avg_confidence.keys() | list | tojson }},
         datasets: [{
             label: 'Confiance moyenne (%)',
-            data: {{ [v * 100 for v in avg_confidence.values()] | tojson }},
+            data: {{ avg_confidence_percent | tojson }},
             backgroundColor: 'rgba(54, 162, 235, 0.5)',
             borderColor: 'rgba(54, 162, 235, 1)',
             borderWidth: 1

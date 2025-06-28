@@ -159,6 +159,7 @@ def show_scan():
     has_netbios  = any(h["netbios"]  for h in data)
     has_cves     = any(c for h in data for c in h["services"] if c["cves"])
     has_type     = any("type" in h for h in data)
+    has_ai = False  # Les anciens scans n'ont pas d'IA
 
     return render_template(
         "index.html",
@@ -171,7 +172,8 @@ def show_scan():
         has_hostname=has_hostname,
         has_netbios=has_netbios,
         has_cves=has_cves,
-        has_type=has_type
+        has_type=has_type,
+        has_ai=has_ai
     )
 
 
@@ -181,25 +183,38 @@ def scan():
     target_ip = request.form.get("target_ip", "192.168.1.0/24")
     include_sv = request.form.get("sv") == "on"
     include_ai = request.form.get("ai") == "on"
-    vulners_key = os.environ.get("VULNERS_API_KEY", "")
-
+    
+    # Déterminer le bon chemin Python et script
+    venv_python = os.environ.get("VIRTUAL_ENV")
+    if venv_python:
+        python_path = os.path.join(venv_python, "bin", "python3")
+    else:
+        python_path = "/usr/bin/python3"
+    
+    # Chemin du script scan.py (dans le même répertoire que app.py)
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scan.py")
+    
     cmd = [
-        "sudo", "env", f"VULNERS_API_KEY={vulners_key}",
-        "/home/etu/venv-sonde/bin/python3",
-        "/home/etu/scan.py",
+        "sudo", 
+        python_path,
+        script_path,
         scan_type,
         target_ip
     ]
+    
     if include_sv:
-        cmd.insert(5, "-v")
+        cmd.append("-v")
     if include_ai:
-        cmd.insert(5, "-a")
+        cmd.append("-a")
 
     try:
-        subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         flash(f"✅ Scan '{scan_type}' sur {target_ip} terminé.", "success")
     except subprocess.CalledProcessError as e:
-        flash(f"❌ Erreur lors du scan : {e}", "danger")
+        error_msg = e.stderr if e.stderr else str(e)
+        flash(f"❌ Erreur lors du scan : {error_msg}", "danger")
+    except Exception as e:
+        flash(f"❌ Erreur inattendue : {str(e)}", "danger")
 
     return redirect(url_for("index"))
 
@@ -345,7 +360,13 @@ def ai_stats():
     
     for scan in scans:
         device_type = scan.device_type or "Unknown"
-        ai_score = float(scan.ai_score) if hasattr(scan, 'ai_score') else 0.5
+        # Récupérer ai_score depuis la base si disponible
+        ai_score = 0.5  # Valeur par défaut
+        if hasattr(scan, 'ai_score') and scan.ai_score:
+            try:
+                ai_score = float(scan.ai_score)
+            except (ValueError, TypeError):
+                ai_score = 0.5
         
         if device_type not in type_counts:
             type_counts[device_type] = 0
@@ -359,12 +380,16 @@ def ai_stats():
     for dtype, scores in confidence_by_type.items():
         avg_confidence[dtype] = sum(scores) / len(scores) if scores else 0
     
+    # Convertir les valeurs de confiance en pourcentages pour le template
+    avg_confidence_percent = [v * 100 for v in avg_confidence.values()]
+    
     session.close()
     
     return render_template(
         "ai_stats.html",
         type_counts=type_counts,
         avg_confidence=avg_confidence,
+        avg_confidence_percent=avg_confidence_percent,
         total_classified=sum(type_counts.values())
     )
 

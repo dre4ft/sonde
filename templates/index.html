@@ -90,7 +90,7 @@
     <div class="d-flex">
       <a href="{{ url_for('historique') }}" class="btn btn-secondary me-2">📜 Historique complet</a>
       <a href="{{ url_for('vulns') }}" class="btn btn-warning me-2">🔓 Vulnérabilités</a>
-      <a href="{{ url_for('software') }}" class="btn btn-info">🛠️ Logiciels</a>
+      <a href="{{ url_for('software') }}" class="btn btn-info me-2">🛠️ Logiciels</a>
       <a href="{{ url_for('ai_stats') }}" class="btn btn-success me-2">🤖 Stats IA</a>
     </div>
   </div>
@@ -169,7 +169,6 @@
                 {% if has_cves     %}<th>Vulnérabilités (CVEs)</th>{% endif %}
                 {% if has_type     %}<th>Type</th>{% endif %}
                 {% if has_ai %}<th>Confiance IA</th><th>Méthode</th>{% endif %}
-                
             </tr>
         </thead>
         <tbody>
@@ -178,65 +177,67 @@
             <tr>
                 <td>{{ host.ip }}</td>
                 <td>{{ host.os }}</td>
-                {% if has_type     %}<td>{{ host.type or '—' }}</td>{% endif %}
                 {% if has_hostname %}<td>{{ host.hostname or '' }}</td>{% endif %}
                 {% if has_netbios  %}<td>{{ host.netbios  or '' }}</td>{% endif %}
                 {% if has_ports    %}<td>{{ host.ports | join(', ') }}</td>{% endif %}
                 {% if has_role     %}<td>{{ host.role }}</td>{% endif %}
 
                 {% if has_services %}
-                  <td>
+                <td>
                     {% if host.services %}
-                      {% for svc in host.services %}
+                    {% for svc in host.services %}
                         <div>{{ svc.info }}</div>
-                      {% endfor %}
+                    {% endfor %}
                     {% else %}
-                      <em>—</em>
+                    <em>—</em>
                     {% endif %}
-                  </td>
+                </td>
                 {% endif %}
 
                 {% if has_cves %}
-                  <td>
+                <td>
                     {% if host.services %}
-                      {% for svc in host.services %}
+                    {% for svc in host.services %}
                         {% set cves = svc.cves %}
                         {% set count = cves|length %}
                         {% set sidx = loop.index0 %}
                         {% if count == 0 %}
-                          <div><em>Aucune</em></div>
+                        <div><em>Aucune</em></div>
                         {% elif count <= 5 %}
-                          <div>
+                        <div>
                             {% for c in cves %}
-                              <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
-                                 target="_blank"><code>{{ c }}</code></a><br>
+                            <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
+                                target="_blank"><code>{{ c }}</code></a><br>
                             {% endfor %}
-                          </div>
+                        </div>
                         {% else %}
-                          <div>
+                        <div>
                             {% for c in cves[:5] %}
-                              <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
-                                 target="_blank"><code>{{ c }}</code></a><br>
+                            <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
+                                target="_blank"><code>{{ c }}</code></a><br>
                             {% endfor %}
                             <button class="btn btn-sm btn-outline-secondary" type="button"
                                     data-bs-toggle="collapse"
                                     data-bs-target="#more-{{ hidx }}-{{ sidx }}">
-                              Voir {{ count-5 }} autres
+                            Voir {{ count-5 }} autres
                             </button>
                             <div class="collapse mt-1" id="more-{{ hidx }}-{{ sidx }}">
-                              {% for c in cves[5:] %}
+                            {% for c in cves[5:] %}
                                 <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name={{ c }}"
-                                   target="_blank"><code>{{ c }}</code></a><br>
-                              {% endfor %}
+                                target="_blank"><code>{{ c }}</code></a><br>
+                            {% endfor %}
                             </div>
-                          </div>
+                        </div>
                         {% endif %}
-                      {% endfor %}
+                    {% endfor %}
                     {% else %}
-                      <em>—</em>
+                    <em>—</em>
                     {% endif %}
-                  </td>
+                </td>
                 {% endif %}
+
+                {% if has_type %}<td>{{ host.type or host.device_type or '—' }}</td>{% endif %}
+                
                 {% if has_ai %}
                     <td>
                         {% if host.ai_score %}
@@ -273,52 +274,6 @@
     <!-- STATISTIQUES -->
     <div class="stats-row">
         <div class="row">
-            <div class="col-md-3">
-                <div class="stat-item">
-                    <div class="stat-number">{{ data|length }}</div>
-                    <div class="stat-label">Équipements</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-item">
-                    <div class="stat-number text-danger">
-                        {% set vuln_count = 0 %}
-                        {% for host in data %}
-                            {% for svc in host.get('services', []) %}
-                                {% set vuln_count = vuln_count + svc.get('cves', [])|length %}
-                            {% endfor %}
-                        {% endfor %}
-                        {{ vuln_count }}
-                    </div>
-                    <div class="stat-label">Vulnérabilités</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-item">
-                    <div class="stat-number">
-                        {% set service_count = 0 %}
-                        {% for host in data %}
-                            {% set service_count = service_count + host.get('services', [])|length %}
-                        {% endfor %}
-                        {{ service_count }}
-                    </div>
-                    <div class="stat-label">Services</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-item">
-                    <div class="stat-number">
-                        {% set critical_count = 0 %}
-                        {% for host in data %}
-                            {% if host.get('role') in ['Service', 'Database', 'Web service'] %}
-                                {% set critical_count = critical_count + 1 %}
-                            {% endif %}
-                        {% endfor %}
-                        {{ critical_count }}
-                    </div>
-                    <div class="stat-label">Assets critiques</div>
-                </div>
-            </div>
             {% if has_ai %}
             <div class="stats-row mt-4">
                 <h5 class="mb-3">📊 Statistiques IA</h5>

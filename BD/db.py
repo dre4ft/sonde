@@ -40,6 +40,8 @@ class Scan(Base):
     device_type = Column(String)
     services  = Column(Text)
     cves      = Column(Text)
+    ai_score  = Column(Float)  # Nouveau champ
+    ai_method = Column(String)  # Nouveau champ
 
     services_rel = relationship(
         "Service", back_populates="scan",
@@ -86,10 +88,11 @@ class ServiceCVE(Base):
     service = relationship("Service", back_populates="cve_assoc")
     cve     = relationship("CVE",     back_populates="service_assoc")
 
-# ─── Migration douce de l’ancien champ unique « scans »
+# ─── Migration douce de l'ancien champ unique « scans »
 _EXPECTED = {
     "id", "timestamp", "scan_type", "ip", "os", "hostname",
     "netbios", "ports", "role", "services", "cves", "device_type",
+    "ai_score", "ai_method"  # Nouveaux champs
 }
 
 
@@ -100,7 +103,10 @@ def _automigrate() -> None:
         cur.execute("PRAGMA table_info(scans);")
         present = {row[1] for row in cur.fetchall()}
         for col in _EXPECTED - present:
-            cur.execute(f"ALTER TABLE scans ADD COLUMN {col} TEXT;")
+            if col == "ai_score":
+                cur.execute(f"ALTER TABLE scans ADD COLUMN {col} REAL;")
+            else:
+                cur.execute(f"ALTER TABLE scans ADD COLUMN {col} TEXT;")
         conn.commit()
 
 
@@ -128,7 +134,9 @@ def save_scan_entry(scan_type: str, hosts: List[Dict]) -> None:
             role=host.get("role", ""),
             services=json.dumps(host.get("services", []), ensure_ascii=False),
             cves=",".join(sorted(host_cves)),
-            device_type=host.get("device_type","")
+            device_type=host.get("device_type",""),
+            ai_score=host.get("ai_score"),  # Nouveau
+            ai_method=host.get("ai_method")  # Nouveau
         )
         session.add(scan)
         session.flush()
