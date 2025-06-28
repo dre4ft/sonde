@@ -4,9 +4,10 @@ import json
 import subprocess
 import threading
 import io
+from io import BytesIO
 from datetime import datetime
 from collections import Counter
-
+from weasyprint import HTML
 from flask import (
     Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
 )
@@ -409,6 +410,94 @@ def ai_stats():
         total_classified=sum(type_counts.values())
     )
 
+@app.route("/report")
+def download_report():
+    # 1) Récupérer le paramètre et valider
+    scan_time = request.args.get("scan_time")
+    if not scan_time:
+        flash("⚠️ Aucun scan sélectionné pour le rapport.", "warning")
+        return redirect(url_for("vulns"))
+    try:
+        dt = datetime.strptime(scan_time, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        flash("⚠️ Format de date invalide pour le rapport.", "danger")
+        return redirect(url_for("vulns"))
+
+    # 2) Charger le scan et ses services depuis SQLite
+    session = Session()
+    scans = (
+        session.query(Scan)
+               .options(joinedload(Scan.services_rel))
+               .filter(
+                   func.strftime('%Y-%m-%d %H:%M:%S', Scan.timestamp) == scan_time
+               )
+               .all()
+    )
+    session.close()
+    if not scans:
+        flash(f"⚠️ Aucun scan trouvé pour la date {scan_time}.", "warning")
+        return redirect(url_for("vulns"))
+
+    # 3) Préparer les données pour le template
+    # --- liste des hôtes et services ---
+    hosts = []
+    for scan in scans:
+        ports = [int(p) for p in (scan.ports or "").split(",") if p.strip()]
+        host = {
+            "ip":       scan.ip,
+            "os":       scan.os,
+            "hostname": scan.hostname or "—",
+            "ports":    ports,
+            "role":     scan.role,
+            "services": []
+        }
+        for svc in scan.services_rel:
+            host["services"].append({
+                "port":    svc.port,
+                "name":    svc.name,
+                "product": svc.product,
+                "version": svc.version,
+                "cves":    [c.strip() for c in (svc.cves or "").split(",") if c.strip()]
+            })
+        hosts.append(host)
+
+    # --- résumé des vulnérabilités (CVE) ---
+    counter, hosts_map = Counter(), {}
+    for h in hosts:
+        for svc in h["services"]:
+            for cve_id in svc["cves"]:
+                counter[cve_id] += 1
+                hosts_map.setdefault(cve_id, set()).add(h["ip"])
+
+    # on peut ne pas charger les scores si vous le souhaitez,
+    # ou faire une requête Mongo comme dans /vulns.
+    vulns = []
+    for cve, cnt in counter.most_common():
+        vulns.append({
+            "cve":     cve,
+            "count":   cnt,
+            "hosts":   sorted(hosts_map[cve])
+        })
+
+    # 4) Rendu HTML du rapport
+    html_out = render_template(
+        "report.html",
+        scan_time=scan_time,
+        hosts=hosts,
+        vulns=vulns
+    )
+
+    # 5) Génération du PDF en mémoire
+    pdf = HTML(string=html_out, base_url=request.base_url).write_pdf()
+
+    # 6) Envoi du PDF
+    pdf_filename = f"rapport_{dt.strftime('%Y-%m-%d_%H_%M_%S')}.pdf"
+    return send_file(
+        BytesIO(pdf),
+        as_attachment=True,
+        download_name=pdf_filename,
+        mimetype="application/pdf"
+    )
 
 # ---- Scan passif ----
 @app.route("/passive_scan")
