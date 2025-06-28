@@ -466,7 +466,9 @@ def download_report():
             "services": []
         }
         for svc in scan.services_rel:
+            info = f"{svc.port}/{svc.name} {svc.product} {svc.version}".strip()
             host["services"].append({
+                "info":    info,
                 "port":    svc.port,
                 "name":    svc.name,
                 "product": svc.product,
