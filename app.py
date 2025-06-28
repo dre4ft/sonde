@@ -19,7 +19,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
-#from ai_local import classify_scan_results
+from ai_local import classify_scan_results
 
 from BD.scan_db import init_db, Session, Scan, Service, CVE
 from BD.packet_db import (
