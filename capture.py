@@ -34,6 +34,8 @@ def process_packet(pkt):
             proto = "UDP"
             sport = pkt[UDP].sport
             dport = pkt[UDP].dport
+        elif ip_layer.proto == 1:
+            proto = "PING
         else:
             proto = str(ip_layer.proto)
 
