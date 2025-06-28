@@ -7,6 +7,8 @@
     <!-- Bootstrap CSS + DataTables -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <!-- Font Awesome pour les icônes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- JS Libraries -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
@@ -61,24 +63,40 @@
             padding: 15px;
             background: #f8f9fa;
             border-radius: 8px;
+            flex-wrap: wrap;
         }
 
         .legend-item {
             display: flex;
             align-items: center;
             gap: 8px;
+            margin-bottom: 5px;
         }
 
-        .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 2px solid #000;
+        .legend-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            font-size: 14px;
         }
 
         td pre {
             white-space: pre-wrap;
             word-break: break-word;
+        }
+
+        /* Style pour les nœuds avec vulnérabilités */
+        .vulnerability-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
@@ -340,9 +358,13 @@
                     <input class="form-check-input" type="checkbox" id="showVulns">
                     <label class="form-check-label" for="showVulns">Vulnérabilités</label>
                 </div>
-                <div class="form-check form-switch d-inline-block">
+                <div class="form-check form-switch d-inline-block me-4">
                     <input class="form-check-input" type="checkbox" id="physicsEnabled" checked>
                     <label class="form-check-label" for="physicsEnabled">Animation</label>
+                </div>
+                <div class="form-check form-switch d-inline-block">
+                    <input class="form-check-input" type="checkbox" id="showIcons" checked>
+                    <label class="form-check-label" for="showIcons">Icônes</label>
                 </div>
             </div>
             <div class="col-md-4 text-end">
@@ -355,30 +377,84 @@
     <h2 class="mt-4">Cartographie du réseau</h2>
     <div id="network"></div>
 
-    <!-- LÉGENDE -->
+    <!-- LÉGENDE AMÉLIORÉE -->
     <div class="legend-box">
         <div class="legend-item">
-            <div class="legend-color" style="background: #4CAF50;"></div>
+            <div class="legend-icon" style="background: #4CAF50; color: white;">
+                <i class="fas fa-satellite-dish"></i>
+            </div>
             <span>Sonde</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background: #2196F3;"></div>
+            <div class="legend-icon" style="background: #2196F3; color: white;">
+                <i class="fas fa-server"></i>
+            </div>
             <span>Service</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background: #FF9800;"></div>
+            <div class="legend-icon" style="background: #FF9800; color: white;">
+                <i class="fas fa-desktop"></i>
+            </div>
             <span>Endpoint</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background: #9C27B0;"></div>
+            <div class="legend-icon" style="background: #E91E63; color: white;">
+                <i class="fas fa-mobile-alt"></i>
+            </div>
+            <span>Smartphone</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #9C27B0; color: white;">
+                <i class="fas fa-print"></i>
+            </div>
             <span>Maintenance</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background: #F44336;"></div>
+            <div class="legend-icon" style="background: #F44336; color: white;">
+                <i class="fas fa-video"></i>
+            </div>
             <span>Surveillance</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background: #9E9E9E;"></div>
+            <div class="legend-icon" style="background: #00BCD4; color: white;">
+                <i class="fas fa-lightbulb"></i>
+            </div>
+            <span>IoT</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #3F51B5; color: white;">
+                <i class="fas fa-database"></i>
+            </div>
+            <span>Database</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #009688; color: white;">
+                <i class="fas fa-globe"></i>
+            </div>
+            <span>Web service</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #FF5722; color: white;">
+                <i class="fas fa-key"></i>
+            </div>
+            <span>Remote access</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #795548; color: white;">
+                <i class="fas fa-envelope"></i>
+            </div>
+            <span>Mail service</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #FFEB3B; color: black;">
+                <i class="fas fa-project-diagram"></i>
+            </div>
+            <span>DNS</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #9E9E9E; color: white;">
+                <i class="fas fa-question"></i>
+            </div>
             <span>Inconnu</span>
         </div>
     </div>
@@ -396,7 +472,31 @@
         document.getElementById('spinner').style.display = 'block';
     });
 
-    // Fonction pour obtenir la couleur selon le rôle
+    // Fonction pour obtenir l'icône selon le type d'appareil détecté par l'IA
+    function getDeviceIcon(deviceType, role) {
+        const icons = {
+            // Types IA spécifiques
+            'Endpoint': { icon: 'fas fa-desktop', color: '#FF9800' },
+            'Smartphone': { icon: 'fas fa-mobile-alt', color: '#E91E63' },
+            'Service': { icon: 'fas fa-server', color: '#2196F3' },
+            'Maintenance': { icon: 'fas fa-print', color: '#9C27B0' },
+            'Surveillance': { icon: 'fas fa-video', color: '#F44336' },
+            'IoT': { icon: 'fas fa-lightbulb', color: '#00BCD4' },
+            'Database': { icon: 'fas fa-database', color: '#3F51B5' },
+            'Web service': { icon: 'fas fa-globe', color: '#009688' },
+            'Remote access': { icon: 'fas fa-key', color: '#FF5722' },
+            'Mail service': { icon: 'fas fa-envelope', color: '#795548' },
+            'DNS': { icon: 'fas fa-project-diagram', color: '#FFEB3B' },
+            'Agent IoT': { icon: 'fas fa-microchip', color: '#00BCD4' },
+            'Sonde': { icon: 'fas fa-satellite-dish', color: '#4CAF50' }
+        };
+        
+        // Priorité au device_type détecté par l'IA, sinon fallback sur le rôle
+        const key = deviceType || role || 'Inconnu';
+        return icons[key] || { icon: 'fas fa-question', color: '#9E9E9E' };
+    }
+
+    // Fonction pour obtenir la couleur selon le rôle (conservée pour compatibilité)
     function getRoleColor(role) {
         const colors = {
             'Service': { background: '#2196F3', border: '#1976D2' },
@@ -413,18 +513,23 @@
         return colors[role] || { background: '#9E9E9E', border: '#757575' };
     }
 
-    // Initialisation des données
+    // Initialisation des données avec icônes
     const nodeData = [
         { 
             id: 0, 
             label: 'Sonde', 
-            shape: 'dot',
-            size: 30,
-            color: { background: '#4CAF50', border: '#45a049' },
-            font: { size: 14, color: '#000' },
+            shape: 'icon',
+            icon: {
+                face: 'FontAwesome',
+                code: '\uf7c0', // fa-satellite-dish
+                size: 50,
+                color: '#4CAF50'
+            },
+            font: { size: 14, color: '#000', multi: true },
             title: 'Sonde d\'audit réseau',
             vulnerabilities: 0,
-            role: 'Sonde'
+            role: 'Sonde',
+            deviceType: 'Sonde'
         },
         {% for host in data %}
         {% set host_id = loop.index %}
@@ -435,10 +540,33 @@
         {
             id: {{ host_id }},
             label: '{{ host.ip }}\n{{ host.device_type or host.get("type", host.get("role", "Inconnu")) }}',
-            shape: 'dot',
-            size: {% if vuln_count > 5 %}25{% elif vuln_count > 0 %}20{% else %}15{% endif %},
-            color: getRoleColor('{{ host.get("role", "Inconnu") }}'),
-            font: { size: 12, color: '#000' },
+            shape: 'icon',
+            icon: (function() {
+                const deviceInfo = getDeviceIcon('{{ host.device_type or host.get("type", "") }}', '{{ host.get("role", "Inconnu") }}');
+                const iconCodes = {
+                    'fas fa-desktop': '\uf390',
+                    'fas fa-mobile-alt': '\uf3cd',
+                    'fas fa-server': '\uf233',
+                    'fas fa-print': '\uf02f',
+                    'fas fa-video': '\uf03d',
+                    'fas fa-lightbulb': '\uf0eb',
+                    'fas fa-database': '\uf1c0',
+                    'fas fa-globe': '\uf0ac',
+                    'fas fa-key': '\uf084',
+                    'fas fa-envelope': '\uf0e0',
+                    'fas fa-project-diagram': '\uf542',
+                    'fas fa-microchip': '\uf2db',
+                    'fas fa-satellite-dish': '\uf7c0',
+                    'fas fa-question': '\uf128'
+                };
+                return {
+                    face: 'FontAwesome',
+                    code: iconCodes[deviceInfo.icon] || '\uf128',
+                    size: {% if vuln_count > 5 %}60{% elif vuln_count > 0 %}50{% else %}40{% endif %},
+                    color: deviceInfo.color
+                };
+            })(),
+            font: { size: 12, color: '#000', multi: true },
             title: `IP: {{ host.ip }}
                     OS: {{ host.get('os', 'Inconnu') }}
                     Type IA: {{ host.device_type or 'Non classifié' }}
@@ -447,7 +575,8 @@
                     {% if host.get('ports') %}Ports: {{ host.ports|join(', ') }}{% endif %}
                     {% if vuln_count > 0 %}⚠️ {{ vuln_count }} vulnérabilité(s){% endif %}`,
             vulnerabilities: {{ vuln_count }},
-            role: '{{ host.get("role", "Inconnu") }}'
+            role: '{{ host.get("role", "Inconnu") }}',
+            deviceType: '{{ host.device_type or host.get("type", "") }}'
         },
         {% endfor %}
     ];
@@ -457,26 +586,38 @@
 
     edges = new vis.DataSet([
         {% for host in data %}
-        { from: 0, to: {{ loop.index }}, color: '#666', width: 1 },
+        { from: 0, to: {{ loop.index }}, color: '#666', width: 1, smooth: { type: 'continuous' } },
         {% endfor %}
     ]);
 
-    // Configuration du réseau
+    // Configuration du réseau améliorée
     const options = {
         nodes: {
             borderWidth: 2,
-            font: { face: 'Arial', size: 12, color: '#000' }
+            font: { face: 'Arial', size: 12, color: '#000' },
+            margin: 10,
+            widthConstraint: { maximum: 200 }
         },
         edges: {
-            arrows: { to: { enabled: true, scaleFactor: 0.5 } }
+            arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+            color: { inherit: 'from' },
+            smooth: { type: 'continuous' }
         },
         physics: {
             enabled: true,
-            stabilization: { iterations: 100 }
+            stabilization: { iterations: 100 },
+            barnesHut: {
+                gravitationalConstant: -2000,
+                centralGravity: 0.3,
+                springLength: 95,
+                springConstant: 0.04,
+                damping: 0.09
+            }
         },
         interaction: {
             hover: true,
-            tooltipDelay: 200
+            tooltipDelay: 200,
+            selectConnectedEdges: false
         }
     };
 
@@ -484,12 +625,15 @@
     const container = document.getElementById('network');
     network = new vis.Network(container, { nodes: nodes, edges: edges }, options);
 
-    // Event listeners corrigés
+    // Event listeners améliorés
     document.getElementById('showLabels').addEventListener('change', function(e) {
         const allNodes = nodes.get();
         const updatedNodes = allNodes.map(node => ({
             ...node,
-            font: { ...node.font, size: e.target.checked ? (node.id === 0 ? 14 : 12) : 0 }
+            font: { 
+                ...node.font, 
+                size: e.target.checked ? (node.id === 0 ? 14 : 12) : 0 
+            }
         }));
         nodes.update(updatedNodes);
     });
@@ -500,13 +644,22 @@
             if (e.target.checked && node.vulnerabilities > 0) {
                 return { 
                     ...node, 
-                    color: { background: '#ff5722', border: '#d32f2f' }
+                    icon: {
+                        ...node.icon,
+                        color: '#ff5722'
+                    },
+                    borderWidth: 4,
+                    shapeProperties: {
+                        borderDashes: [5, 5]
+                    }
                 };
             } else {
                 const original = originalNodeData.find(n => n.id === node.id);
                 return { 
                     ...node, 
-                    color: original ? original.color : getRoleColor(node.role)
+                    icon: original ? original.icon : node.icon,
+                    borderWidth: 2,
+                    shapeProperties: {}
                 };
             }
         });
@@ -517,10 +670,59 @@
         network.setOptions({ physics: { enabled: e.target.checked } });
     });
 
+    // Nouveau contrôle pour basculer entre icônes et points
+    document.getElementById('showIcons').addEventListener('change', function(e) {
+        const allNodes = nodes.get();
+        const updatedNodes = allNodes.map(node => {
+            if (e.target.checked) {
+                // Mode icônes
+                const original = originalNodeData.find(n => n.id === node.id);
+                return {
+                    ...node,
+                    shape: 'icon',
+                    icon: original ? original.icon : node.icon
+                };
+            } else {
+                // Mode points colorés (ancien style)
+                const color = node.id === 0 ? 
+                    { background: '#4CAF50', border: '#45a049' } :
+                    getRoleColor(node.role);
+                return {
+                    ...node,
+                    shape: 'dot',
+                    size: node.vulnerabilities > 5 ? 25 : (node.vulnerabilities > 0 ? 20 : 15),
+                    color: color
+                };
+            }
+        });
+        nodes.update(updatedNodes);
+    });
+
     // Fonction utilitaire
     function resetView() {
         network.fit();
+        // Réinitialiser aux paramètres par défaut
+        nodes.update(originalNodeData);
     }
+
+    // Animation pour les nœuds avec vulnérabilités (optionnel)
+    setInterval(() => {
+        const showVulns = document.getElementById('showVulns').checked;
+        if (showVulns) {
+            const vulnNodes = originalNodeData.filter(n => n.vulnerabilities > 0);
+            vulnNodes.forEach(node => {
+                const current = nodes.get(node.id);
+                const pulse = Math.sin(Date.now() / 500) * 0.3 + 0.7;
+                nodes.update({
+                    ...current,
+                    icon: {
+                        ...current.icon,
+                        color: `rgba(255, 87, 34, ${pulse})`
+                    }
+                });
+            });
+        }
+    }, 100);
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
