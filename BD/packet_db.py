@@ -1,8 +1,9 @@
 import os
 from datetime import datetime
 from typing import List
+import json
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship, joinedload
 
 # Configuration base de données
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -65,11 +66,11 @@ def init_packet_db():
 
 # --- Fonctions CRUD ---
 
-def add_ko_packet(packet: Packet, rules: str) -> KO_packet:
+def add_ko_packet(packet: Packet, rules: dict) -> KO_packet:
     session = SessionPackets()
     ko_pkt = KO_packet(
         packet=packet,
-        rules=rules
+        rules=json.dumps(rules)  # Sérialisation JSON du dict avant insertion en base
     )
     session.add(ko_pkt)
     session.commit()
@@ -77,13 +78,19 @@ def add_ko_packet(packet: Packet, rules: str) -> KO_packet:
     session.close()
     return ko_pkt
 
-
-def get_ko_packets() -> List[KO_packet]:
+def get_ko_packets(limit=100):
     session = SessionPackets()
-    ko_packets = session.query(KO_packet).all()
-    session.close()
-    return ko_packets
-
+    try:
+        ko_packets = (
+            session.query(KO_packet)
+            .options(joinedload(KO_packet.packet))
+            .order_by(KO_packet.id.desc())  # Tri pour les plus récents
+            .limit(limit)
+            .all()
+        )
+        return ko_packets
+    finally:
+        session.close()
 
 def create_capture_session(interface: str) -> CaptureSession:
     session = SessionPackets()

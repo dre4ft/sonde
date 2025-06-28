@@ -3,15 +3,21 @@ import os
 import json
 import subprocess
 import threading
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify,send_file
 from sqlalchemy import func, create_engine
 from sqlalchemy.orm import joinedload, sessionmaker
 from datetime import datetime
 from collections import Counter
 from pymongo import MongoClient
+import io
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from datetime import datetime
 
 from BD.scan_db import init_db, Session, Scan, Service, CVE
-from BD.packet_db import init_packet_db, Packet,SessionPackets, KO_packet # import Packet depuis ta db de paquets
+from BD.packet_db import init_packet_db, Packet,SessionPackets, KO_packet, get_ko_packets # import Packet depuis ta db de paquets
 from capture import start_capture, stop_capture,get_rules
 from rule_engine import RulesEngine
 
@@ -21,6 +27,10 @@ CVE_DB    = "cvedb"
 
 mongo_client = MongoClient(MONGO_URI, tz_aware=False)
 cve_col      = mongo_client[CVE_DB]["cves"]
+
+# ─── Fichier de règles ──────────────────────────────────────────────────────────
+
+RULES_FILE = 'rules.json'
 
 # ─── Flask app ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -338,7 +348,7 @@ def api_get_packets():
                 "src_port": p.src_port,
                 "dst_port": p.dst_port,
                 "raw": p.raw,
-                "rule_matched": p.rule_matched
+                "rule_matched": p.rule_matched.lower() == "true" if isinstance(p.rule_matched, str) else bool(p.rule_matched)
             })
         return jsonify(results)
     except Exception as e:
@@ -346,25 +356,176 @@ def api_get_packets():
     finally:
         session.close()
 
+
 @app.route("/api/ko_packets/")
 def api_get_ko_packets(): 
-    session = SessionPackets()
     try:
-        ko_packets = session.query(KO_packet).order_by(KO_packet.id.desc()).limit(100).all()
+        ko_packets = get_ko_packets()
         if not ko_packets:
-            return jsonify({"message": "Aucun paquet bloqué trouvé"}), 404
-        else : 
-            results = []
-            for p in ko_packets:
-                results.append({
-                    "packet" : p.packets,
-                    "broken_rules": p.rules,
-                })
-            return jsonify(results)
+            return jsonify([]), 200  # Retourne une liste vide au lieu d'une erreur 404
+
+        results = []
+        for ko in ko_packets:
+            pkt = ko.packet
+            results.append({
+                "id": ko.id,
+                "rules": ko.rules,
+                "packet": {
+                    "id": pkt.id,
+                    "timestamp": pkt.timestamp.isoformat(),
+                    "src_ip": pkt.src_ip,
+                    "dst_ip": pkt.dst_ip,
+                    "protocol": pkt.protocol,
+                    "src_port": pkt.src_port,
+                    "dst_port": pkt.dst_port,
+                    "raw": pkt.raw,
+                    "rule_matched": pkt.rule_matched,
+                }
+            })
+        return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        session.close()
+
+
+
+@app.route('/api/download_ko_packets_pdf')
+def download_ko_packets_pdf():
+    ko_packets = get_ko_packets()
+    if not ko_packets:
+        return jsonify({"error": "Aucun paquet KO trouvé"}), 404    
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # 🔹 Titre principal
+    title = Paragraph("Récapitulatif des paquets non conformes", styles['Title'])
+    subtitle = Paragraph(
+        "Ce document contient la liste des paquets réseau ayant enfreint une ou plusieurs règles de sécurité définies par la sonde d’audit.",
+        styles['Normal']
+    )
+    elements.extend([title, Spacer(1, 12), subtitle, Spacer(1, 24)])
+
+    # 🔹 Données du tableau
+    headers = ["ID", "Règle", "Horodatage", "IP source", "IP destination", "Protocole"]
+    data = [headers]
+
+    for pkt in ko_packets:
+        try:
+            rule_desc = ""
+            if hasattr(pkt, 'rule'):
+                rule_desc = pkt.rule
+            elif hasattr(pkt, 'rules'):
+                try:
+                    rules_obj = json.loads(pkt.rules)
+                    rule_desc = rules_obj.get('description', str(pkt.rules))
+                except Exception:
+                    rule_desc = str(pkt.rules)
+
+            packet = pkt.packet
+            data.append([
+                str(pkt.id),
+                rule_desc[:40],
+                packet.timestamp.strftime('%Y-%m-%d %H:%M:%S') if hasattr(packet, 'timestamp') and packet.timestamp else "",
+                getattr(packet, 'src_ip', ""),
+                getattr(packet, 'dst_ip', ""),
+                getattr(packet, 'protocol', "")
+            ])
+        except Exception as e:
+            print("Erreur lors de l'ajout du paquet au PDF:", e)
+
+    # 🔹 Création du tableau stylisé
+    table = Table(data, colWidths=[40, 140, 110, 90, 90, 60])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.25, colors.black),
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
+
+    # 🔹 Nom du fichier avec date
+    date_str = datetime.now().strftime("%d-%m-%Y")
+    filename = f"paquets_KO_{date_str}.pdf"
+
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/pdf'
+    )
+
+
+
+
+
+@app.route("/api/add_rules", methods=["POST"])
+def add_rules():
+    try:
+        # On récupère la donnée brute envoyée (en texte)
+        raw_data = request.get_data(as_text=True).strip()
+
+        # Pour que ce soit un JSON valide de liste, on ajoute des crochets autour
+        # Exemple : raw_data = '{...}, {...}' -> '[{...}, {...}]'
+        try:
+            new_rules_data = json.loads(f"[{raw_data}]")
+        except json.JSONDecodeError as e:
+            return jsonify({"detail": f"Erreur JSON : {str(e)}"}), 400
+
+        if not isinstance(new_rules_data, list):
+            return jsonify({"detail": "Une liste de règles est requise."}), 400
+
+        # Charger les règles existantes
+        if not os.path.exists(RULES_FILE):
+            rules = {"rules": []}
+        else:
+            with open(RULES_FILE, "r") as f:
+                rules = json.load(f)
+
+        existing_ids = [rule.get("id", 0) for rule in rules["rules"]]
+        next_id = max(existing_ids, default=0) + 1
+
+        added_rules = []
+
+        for rule_data in new_rules_data:
+            if "description" not in rule_data:
+                return jsonify({"detail": "Chaque règle doit contenir un champ 'description'."}), 400
+
+            new_rule = {
+                "id": next_id,
+                "description": rule_data["description"],
+                "src_ip": rule_data.get("src_ip", "0.0.0.0/0"),
+                "dst_ip": rule_data.get("dst_ip", "0.0.0.0/0"),
+                "protocol": rule_data.get("protocol", "TCP"),
+                "dst_port": rule_data.get("dst_port"),
+                "src_port": rule_data.get("src_port"),
+                "action": rule_data.get("action", "deny"),
+            }
+
+            # Supprimer les champs None
+            new_rule = {k: v for k, v in new_rule.items() if v is not None}
+
+            rules["rules"].append(new_rule)
+            added_rules.append(new_rule)
+            next_id += 1
+
+        # Sauvegarder
+        with open(RULES_FILE, "w") as f:
+            json.dump(rules, f, indent=2)
+        
+
+        return jsonify({"message": f"{len(added_rules)} règles ajoutées avec succès.", "rules": added_rules}), 200
+
+    except Exception as e:
+        return jsonify({"detail": f"Erreur serveur : {str(e)}"}), 500
+
 
 @app.route("/api/rules/")
 def api_get_rules():
@@ -372,7 +533,8 @@ def api_get_rules():
 
 @app.route("/api/start_capture", methods=["POST"])
 def api_start_capture():
-    interface = request.form.get("interface", "lo0")
+    data = request.get_json()
+    interface = data.get("interface") if data else None
     started = start_capture(interface)
     if not started:
         return jsonify({"error": "Capture déjà en cours"}), 400

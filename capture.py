@@ -66,9 +66,9 @@ def process_packet(pkt):
         if not rule_matched.is_valid:
             # Si le paquet est bloqué, on crée un KO_packet lié à ce packet
             add_ko_packet(packet_db, rule_matched.rule)
-            print(f"Paquet bloqué: {raw_summary} | Règle: {rule_matched.rule}")
-        else:
-            print(f"Packet capturé: {raw_summary} | Valide: {rule_matched.is_valid}")
+            #print(f"Paquet bloqué: {raw_summary} | Règle: {rule_matched.rule}")
+        #else:
+            #print(f"Packet capturé: {raw_summary} | Valide: {rule_matched.is_valid}")
 
 def _sniff_thread(interface):
     sniff(iface=interface, prn=process_packet, store=0, stop_filter=lambda x: _stop_event.is_set())
