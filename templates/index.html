@@ -119,6 +119,18 @@
     <h1 class="mb-4">Sonde d'audit réseau</h1>
     <p class="text-muted">Fichier chargé : <strong>{{ filename or 'BD' }}</strong></p>
 
+    <!-- Messages Flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' if category == 'success' else 'warning' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <!-- Sélecteur d'un scan déjà enregistré -->
     <form method="get" action="{{ url_for('show_scan') }}" class="row g-2 mb-4 align-items-end">
       <div class="col-md-8">
@@ -136,7 +148,7 @@
     </form>
 
     <!-- FORMULAIRE DE SCAN -->
-    <form method="POST" action="/scan" class="mb-4">
+    <form method="POST" action="/scan" class="mb-4" id="scanForm">
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label for="scan_type" class="form-label">Type de scan :</label>
@@ -172,6 +184,7 @@
             <span class="visually-hidden">Chargement...</span>
         </div>
         <p>Scan en cours, merci de patienter...</p>
+        <p class="text-muted small">Cela peut prendre plusieurs minutes selon la taille du réseau.</p>
     </div>
 
     <!-- TABLEAU DES RÉSULTATS -->
@@ -467,9 +480,29 @@
     let nodes, edges;
     let originalNodeData = [];
 
-    // Spinner sur clic
-    document.getElementById('scanBtn').addEventListener('click', () => {
+    // Improved form submission handling
+    document.getElementById('scanForm').addEventListener('submit', function(e) {
+        // Show spinner
         document.getElementById('spinner').style.display = 'block';
+        
+        // Disable the submit button to prevent multiple submissions
+        document.getElementById('scanBtn').disabled = true;
+        document.getElementById('scanBtn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Scan en cours...';
+        
+        // The form will submit normally
+    });
+
+    // Check if page was reloaded after scan (by looking for flash messages)
+    document.addEventListener('DOMContentLoaded', function() {
+        // Hide spinner on page load (in case of redirect after scan)
+        document.getElementById('spinner').style.display = 'none';
+        
+        // Re-enable button
+        const scanBtn = document.getElementById('scanBtn');
+        if (scanBtn) {
+            scanBtn.disabled = false;
+            scanBtn.innerHTML = 'Lancer le scan';
+        }
     });
 
     // Fonction pour obtenir l'icône selon le type d'appareil détecté par l'IA
