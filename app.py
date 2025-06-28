@@ -655,6 +655,7 @@ def download_ko_packets_pdf():
 @app.route("/api/add_rules", methods=["POST"])
 def add_rules():
     try:
+        RULES_FILE="rules.json"
         # On récupère la donnée brute envoyée (en texte)
         raw_data = request.get_data(as_text=True).strip()
 
