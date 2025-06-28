@@ -35,7 +35,7 @@ def process_packet(pkt):
             sport = pkt[UDP].sport
             dport = pkt[UDP].dport
         elif ip_layer.proto == 1:
-            proto = "PING
+            proto = "ICMP"
         else:
             proto = str(ip_layer.proto)
 
