@@ -1,0 +1,48 @@
+{
+  "rules": [
+    {
+      "id": 1,
+      "description": "Bloquer SSH externe",
+      "src_ip": "0.0.0.0/0",
+      "dst_ip": "192.168.1.0/24",
+      "protocol": "TCP",
+      "dst_port": 22,
+      "action": "deny"
+    },
+    {
+      "id": 2,
+      "description": "Autoriser HTTP interne",
+      "src_ip": "192.168.1.0/24",
+      "dst_ip": "0.0.0.0/0",
+      "protocol": "TCP",
+      "dst_port": 80,
+      "action": "allow"
+    },
+    {
+      "id": 3,
+      "description": "Autoriser loopback",
+      "src_ip": "127.0.0.1/8",
+      "dst_ip": "127.0.0.1/8",
+      "protocol": "TCP",
+      "action": "allow"
+    },
+    {
+      "id": 4,
+      "description": "Bloquer DNS UDP externe",
+      "src_ip": "0.0.0.0/0",
+      "dst_ip": "0.0.0.0/0",
+      "protocol": "UDP",
+      "dst_port": 53,
+      "action": "deny"
+    },
+    {
+      "id": 5,
+      "description": "refuser  sur le port 5000",
+      "src_ip": "0.0.0.0/0",
+      "dst_ip": "127.0.0.1/8",
+      "protocol": "TCP",
+      "dst_port": 5000,
+      "action": "deny"
+    }
+  ]
+}
