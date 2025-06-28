@@ -5,7 +5,6 @@ __pycache__/
 *.log
 
 # Résultats de scan
-*.json
 lastscan.txt
 
 # Zeek / config inutiles

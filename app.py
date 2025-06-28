@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os
+import os, sys
 import json
 import subprocess
 import threading
@@ -20,7 +20,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
-#from ai_local import classify_scan_results
+from ai_local import classify_scan_results
 
 from BD.scan_db import init_db, Session, Scan, Service, CVE
 from BD.packet_db import (
@@ -201,17 +201,18 @@ def scan():
     include_ai = request.form.get("ai") == "on"
     
     # Déterminer le bon chemin Python et script
-    venv_python = os.environ.get("VIRTUAL_ENV")
-    if venv_python:
-        python_path = os.path.join(venv_python, "bin", "python3")
-    else:
-        python_path = "/usr/bin/python3"
+    # venv_python = os.environ.get("VIRTUAL_ENV")
+    # if venv_python:
+    #     python_path = os.path.join(venv_python, "bin", "python3")
+    # else:
+    #     python_path = "/usr/bin/python3"
+    python_path = sys.executable
     
     # Chemin du script scan.py (dans le même répertoire que app.py)
     script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scan.py")
     
     cmd = [
-        "sudo", 
+        "sudo", "-E",
         python_path,
         script_path,
         scan_type,
