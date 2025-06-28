@@ -9,7 +9,7 @@ import vulners
 from ai_local import classify_roles_local
 
 
-from BD.db import save_scan_entry
+from BD.scan_db import save_scan_entry
 
 # On récupère la clé API Vulners dans la variable d'environnement
 api_key = os.environ.get("VULNERS_API_KEY")

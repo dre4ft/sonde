@@ -7,8 +7,8 @@ MarkupSafe==3.0.2
 python-nmap==0.7.1
 Werkzeug==3.1.3
 sqlalchemy
-sqlalchemy
-vulners
 vulners==1.5.18
-sqlalchemy
-urllib3==1.26.16    
+urllib3==1.26.16
+pymongo==4.0.1
+reportlab==3.5.0
+transformers==4.37.2

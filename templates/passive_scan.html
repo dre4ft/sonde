@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sonde d'audit réseau - IHM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    pre.payload-preview {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+<div class="container my-5">
+  <div class="d-flex flex-column flex-md-row align-items-center justify-content-between mb-4 gap-3">
+    <button class="btn btn-secondary" onclick="window.location.href='/'">
+      ← Retour à l'accueil
+    </button>
+    <h1 class="mb-0 text-center flex-grow-1">Sonde d'audit réseau</h1>
+    <button class="btn btn-primary" onclick="downloadKOPacketsPDF()">
+      Télécharger PDF des paquets KO
+    </button>
+  </div>
+
+  <div class="mb-4">
+    <button id="toggleRuleFormBtn" class="btn btn-outline-primary mb-3" onclick="toggleRuleForm()">
+      Ajouter une ou plusieurs règles
+    </button>
+    <div id="rule-form" class="card p-4 shadow-sm d-none">
+      <h5 class="mb-3">Nouvelle(s) règle(s)</h5>
+      <label for="ruleInput" class="form-label">
+        Collez vos règles au format JSON (sans crochets []), séparées par des virgules :
+      </label>
+      <textarea id="ruleInput" class="form-control mb-3" rows="8" placeholder='{
+  "description": "Nouvelle règle 1",
+  "src_ip": "10.0.0.0/8",
+  "dst_ip": "192.168.1.0/24",
+  "protocol": "TCP",
+  "dst_port": 8080,
+  "action": "allow"
+}'></textarea>
+      <div class="d-flex justify-content-end">
+        <button class="btn btn-success" onclick="sendRules()">Envoyer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row align-items-center mb-4">
+    <label for="iface" class="col-sm-2 col-form-label fw-semibold">Interface réseau :</label>
+    <div class="col-sm-4">
+      <input type="text" id="iface" class="form-control" placeholder="ex: eth0" value="" />
+    </div>
+    <div class="col-sm-6 d-flex gap-2 flex-wrap">
+      <button class="btn btn-success flex-grow-1" onclick="startCapture()">Démarrer la capture</button>
+      <button class="btn btn-danger flex-grow-1" onclick="stopCapture()">Arrêter la capture</button>
+    </div>
+  </div>
+
+  <p id="status" class="fw-bold">
+    Statut : <span class="text-muted">Inactif</span>
+  </p>
+
+  <!-- Tableau des paquets normaux -->
+  <h2 class="mt-5 mb-3">Paquets capturés (derniers 100)</h2>
+  <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+    <table id="packets-table" class="table table-striped table-bordered table-hover align-middle">
+      <thead class="table-secondary sticky-top">
+        <tr>
+          <th>ID</th>
+          <th>Timestamp</th>
+          <th>Src IP</th>
+          <th>Dst IP</th>
+          <th>Proto</th>
+          <th>Src Port</th>
+          <th>Dst Port</th>
+          <th>Payload</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Tableau des paquets non conformes -->
+  <div class="mt-5">
+    <h2 class="mb-3">Paquets non conformes</h2>
+    <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+      <table id="ko-packets-table" class="table table-striped table-bordered table-hover align-middle">
+        <thead class="table-secondary sticky-top">
+          <tr>
+            <th>KO Packet ID</th>
+            <th>Rule</th>
+            <th>Packet ID</th>
+            <th>Timestamp</th>
+            <th>Src IP</th>
+            <th>Dst IP</th>
+            <th>Protocol</th>
+            <th>Src Port</th>
+            <th>Dst Port</th>
+            <th>Payload</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Bootstrap -->
+<div class="modal fade" id="payloadModal" tabindex="-1" aria-labelledby="payloadModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="payloadModalLabel">Contenu du paquet</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <pre id="modalPayload" style="white-space: pre-wrap; word-wrap: break-word;"></pre>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+is_capturing = false;
+async function startCapture() {
+    if (is_capturing) {
+        alert("La capture est déjà en cours.");
+        return;
+    }
+  
+    const iface = document.getElementById("iface").value.trim();
+    if (!iface) {
+        alert("Veuillez saisir une interface réseau.");
+        return;
+    }
+    try {
+        const resp = await fetch("/api/start_capture", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({interface: iface})
+        });
+        if (resp.ok) {
+        document.getElementById("status").innerHTML = 'Statut : <span class="text-success">Capture démarrée sur ' + iface + '</span>';
+        is_capturing = true;
+        } else {
+        const err = await resp.json();
+        document.getElementById("status").innerHTML = 'Erreur : <span class="text-danger">' + err.detail + '</span>';
+        }
+    } catch (e) {
+        document.getElementById("status").innerHTML = '<span class="text-danger">Erreur de connexion</span>';
+    }
+}
+
+async function stopCapture() {
+    if (!is_capturing) {
+        alert("Aucune capture en cours.");
+        return;
+    }
+    is_capturing = false;
+    try {
+        const resp = await fetch("/api/stop_capture", {method: "POST"});
+        if (resp.ok) {
+        document.getElementById("status").innerHTML = 'Statut : <span class="text-warning">Capture arrêtée</span>';
+        } else {
+        const err = await resp.json();
+        document.getElementById("status").innerHTML = 'Erreur : <span class="text-danger">' + err.detail + '</span>';
+        }
+    } catch (e) {
+        document.getElementById("status").innerHTML = '<span class="text-danger">Erreur de connexion</span>';
+    }
+}
+function toggleRuleForm() {
+  const form = document.getElementById("rule-form");
+  const btn = document.getElementById("toggleRuleFormBtn");
+
+  if (form.classList.contains("d-none")) {
+    form.classList.remove("d-none");
+    btn.textContent = "Masquer le formulaire";
+  } else {
+    form.classList.add("d-none");
+    btn.textContent = "Ajouter une règle";
+  }
+}
+
+async function sendRules() {
+  // Récupérer le contenu brut de la zone de texte
+  const rulesText = document.getElementById("ruleInput").value.trim();
+  if (is_capturing){
+    stopCapture(); // Arrêter la capture avant d'envoyer les règles
+  }
+  
+  if (!rulesText) {
+    alert("Veuillez entrer au moins une règle.");
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/add_rules", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json", // Indiquer qu'on envoie du JSON
+      },
+      body: rulesText, // On envoie directement le texte brut (pas d'objet JSON)
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert(data.message);
+      // Optionnel : vider la zone de texte après succès
+      document.getElementById("ruleInput").value = "";
+    } else {
+      alert("Erreur : " + data.detail);
+    }
+  } catch (error) {
+    alert("Erreur réseau ou serveur : " + error.message);
+  }
+}
+
+
+
+function showPayloadModal(payload) {
+  const modalPayload = document.getElementById('modalPayload');
+  modalPayload.textContent = payload;
+  const modal = new bootstrap.Modal(document.getElementById('payloadModal'));
+  modal.show();
+}
+
+async function fetchPackets() {
+  try {
+    if (!is_capturing) {
+      document.getElementById("status").innerHTML = 'Statut : <span class="text-muted">Inactif</span>';
+      return;
+    }
+    const resp = await fetch("/api/packets/");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const packets = await resp.json();
+    const tbody = document.querySelector("#packets-table tbody");
+    tbody.innerHTML = "";
+
+    for (const p of packets) {
+        const ruleMatchedBool = (p.rule_matched === true || p.rule_matched === "true");
+        let bgColor;
+        if (ruleMatchedBool) {
+           bgColor = "#b1fac5";
+        } else {
+           bgColor = "#fc0303";
+        }
+        /*console.log('Packet', p.id, 'rule_matched:', p.rule_matched, "bool:", ruleMatchedBool); */
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="background-color: ${bgColor};">${p.id}</td>
+        <td style="background-color: ${bgColor};">${p.timestamp}</td>
+        <td style="background-color: ${bgColor};">${p.src_ip}</td>
+        <td style="background-color: ${bgColor};">${p.dst_ip}</td>
+        <td style="background-color: ${bgColor};">${p.protocol}</td>
+        <td style="background-color: ${bgColor};">${p.src_port ?? ""}</td>
+        <td style="background-color: ${bgColor};">${p.dst_port ?? ""}</td>
+        <td style="background-color: ${bgColor};">
+          <pre class="payload-preview">${p.raw.length > 50 ? p.raw.slice(0, 50) + '...' : p.raw}</pre>
+          ${p.raw.length > 50 ? `<button class="btn btn-sm btn-link p-0" onclick="showPayloadModal(\`${p.raw.replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`)">Voir plus</button>` : ''}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+  } catch (e) {
+    console.error("Erreur fetchPackets:", e);
+  }
+}
+
+async function fetchKOPackets() {
+  try {
+    if (!is_capturing) {
+      document.getElementById("status").innerHTML = 'Statut : <span class="text-muted">Inactif</span>';
+      return;
+    }
+    const resp = await fetch("/api/ko_packets/");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const koPackets = await resp.json();
+    const tbody = document.querySelector("#ko-packets-table tbody");
+    tbody.innerHTML = "";
+
+    for (const ko of koPackets) {
+        // Parse rules JSON string et extrais description
+        let ruleDescription = "";
+        try {
+          const ruleObj = JSON.parse(ko.rules);
+          ruleDescription = ruleObj.description || ko.rules; // fallback si pas de description
+        } catch {
+          ruleDescription = ko.rules; // si JSON invalide, afficher brut
+        }
+
+        const p = ko.packet;  // un seul paquet
+
+        const bgColor = p.rule_matched ? "#b1fac5" : "#ff6e6";
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="background-color: ${bgColor};">${ko.id}</td>
+            <td style="background-color: ${bgColor};">${ruleDescription}</td>
+            <td style="background-color: ${bgColor};">${p.id}</td>
+            <td style="background-color: ${bgColor};">${p.timestamp}</td>
+            <td style="background-color: ${bgColor};">${p.src_ip}</td>
+            <td style="background-color: ${bgColor};">${p.dst_ip}</td>
+            <td style="background-color: ${bgColor};">${p.protocol}</td>
+            <td style="background-color: ${bgColor};">${p.src_port ?? ""}</td>
+            <td style="background-color: ${bgColor};">${p.dst_port ?? ""}</td>
+            <td style="background-color: ${bgColor};">
+              <pre class="payload-preview">${p.raw.length > 50 ? p.raw.slice(0, 50) + '...' : p.raw}</pre>
+              ${p.raw.length > 50 ? `<button class="btn btn-sm btn-link p-0" onclick="showPayloadModal(\`${p.raw.replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`)">Voir plus</button>` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+  } catch (e) {
+    console.error("Erreur fetchKOPackets:", e);
+  }
+}
+function downloadKOPacketsPDF() {
+  // Cette ligne déclenche le téléchargement via redirection navigateur
+  window.location.href = "/api/download_ko_packets_pdf";
+}
+
+
+async function fetchAllData() {
+  await fetchPackets();
+  await fetchKOPackets();
+}
+
+setInterval(fetchAllData, 3000);
+fetchAllData();
+</script>
+
+</body>
+</html>
