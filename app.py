@@ -11,7 +11,7 @@ from collections import Counter
 from pymongo import MongoClient
 
 from BD.scan_db import init_db, Session, Scan, Service, CVE
-from BD.packet_db import init_packet_db, Packet,SessionPackets # import Packet depuis ta db de paquets
+from BD.packet_db import init_packet_db, Packet,SessionPackets, KO_packet # import Packet depuis ta db de paquets
 from capture import start_capture, stop_capture,get_rules
 from rule_engine import RulesEngine
 
@@ -341,6 +341,26 @@ def api_get_packets():
                 "rule_matched": p.rule_matched
             })
         return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        session.close()
+
+@app.route("/api/ko_packets/")
+def api_get_ko_packets(): 
+    session = SessionPackets()
+    try:
+        ko_packets = session.query(KO_packet).order_by(KO_packet.id.desc()).limit(100).all()
+        if not ko_packets:
+            return jsonify({"message": "Aucun paquet bloqué trouvé"}), 404
+        else : 
+            results = []
+            for p in ko_packets:
+                results.append({
+                    "packet" : p.packets,
+                    "broken_rules": p.rules,
+                })
+            return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:

@@ -33,6 +33,7 @@
 
   <p id="status" class="fw-bold">Statut : <span class="text-muted">Inactif</span></p>
 
+  <!-- Tableau des paquets normaux -->
   <h2 class="mt-5 mb-3">Paquets capturés (derniers 100)</h2>
   <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
     <table id="packets-table" class="table table-striped table-bordered table-hover align-middle">
@@ -51,9 +52,33 @@
       <tbody></tbody>
     </table>
   </div>
+
+  <!-- Tableau des paquets non conformes -->
+  <div class="mt-5">
+    <h2 class="mb-3">Packets non conformes</h2>
+    <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+      <table id="ko-packets-table" class="table table-striped table-bordered table-hover align-middle">
+        <thead class="table-secondary sticky-top">
+          <tr>
+            <th>KO Packet ID</th>
+            <th>Rule</th>
+            <th>Packet ID</th>
+            <th>Timestamp</th>
+            <th>Src IP</th>
+            <th>Dst IP</th>
+            <th>Protocol</th>
+            <th>Src Port</th>
+            <th>Dst Port</th>
+            <th>Payload</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
-<!-- Modal Bootstrap pour afficher le payload complet -->
+<!-- Modal Bootstrap -->
 <div class="modal fade" id="payloadModal" tabindex="-1" aria-labelledby="payloadModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -129,11 +154,8 @@ async function fetchPackets() {
     for (const p of packets) {
       const bgColor = p.rule_matched ? "#b1fac5" : "#ff6e6";
 
-      // 1ère ligne avec infos classiques + coloration
-      const tr1 = document.createElement("tr");
-
-      // Appliquer la couleur de fond à chaque cellule
-      tr1.innerHTML = `
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
         <td style="background-color: ${bgColor};">${p.id}</td>
         <td style="background-color: ${bgColor};">${p.timestamp}</td>
         <td style="background-color: ${bgColor};">${p.src_ip}</td>
@@ -146,16 +168,56 @@ async function fetchPackets() {
           ${p.raw.length > 50 ? `<button class="btn btn-sm btn-link p-0" onclick="showPayloadModal(\`${p.raw.replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`)">Voir plus</button>` : ''}
         </td>
       `;
-
-      tbody.appendChild(tr1);
+      tbody.appendChild(tr);
     }
   } catch (e) {
     console.error("Erreur fetchPackets:", e);
   }
 }
 
+async function fetchKOPackets() {
+  try {
+    const resp = await fetch("/api/ko_packets/");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const koPackets = await resp.json();
+    const tbody = document.querySelector("#ko-packets-table tbody");
+    tbody.innerHTML = "";
+
+    for (const ko of koPackets) {
+      const rule = ko.rules;
+      for (const p of ko.packets) {
+        const bgColor = p.rule_matched ? "#b1fac5" : "#ff6e6";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="background-color: ${bgColor};">${ko.id}</td>
+          <td style="background-color: ${bgColor};">${rule}</td>
+          <td style="background-color: ${bgColor};">${p.id}</td>
+          <td style="background-color: ${bgColor};">${p.timestamp}</td>
+          <td style="background-color: ${bgColor};">${p.src_ip}</td>
+          <td style="background-color: ${bgColor};">${p.dst_ip}</td>
+          <td style="background-color: ${bgColor};">${p.protocol}</td>
+          <td style="background-color: ${bgColor};">${p.src_port ?? ""}</td>
+          <td style="background-color: ${bgColor};">${p.dst_port ?? ""}</td>
+          <td style="background-color: ${bgColor};">
+            <pre class="payload-preview">${p.raw.length > 50 ? p.raw.slice(0, 50) + '...' : p.raw}</pre>
+            ${p.raw.length > 50 ? `<button class="btn btn-sm btn-link p-0" onclick="showPayloadModal(\`${p.raw.replace(/`/g, '\\`').replace(/\\/g, '\\\\')}\`)">Voir plus</button>` : ''}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+  } catch (e) {
+    console.error("Erreur fetchKOPackets:", e);
+  }
+}
+
+async function fetchAllData() {
+  await fetchPackets();
+  await fetchKOPackets();
+}
+
 setInterval(fetchPackets, 1000);
-fetchPackets();
+fetchAllData();
 </script>
 
 </body>

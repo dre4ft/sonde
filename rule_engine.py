@@ -11,17 +11,24 @@ class Packet:
     src_port: Optional[int] = None
     dst_port: Optional[int] = None
 
+
+@dataclass
+class ruleMatched:
+    rule: dict
+    is_valid: bool
+
 class RulesEngine:
 
     def __init__(self, rules_file="rules.json"):
         with open(rules_file, "r") as f:
             self.rules = json.load(f)["rules"]
 
-    def match_packet(self, packet : Packet) -> bool:
+    def match_packet(self, packet : Packet) -> ruleMatched:
         """
         Retourne False si une règle deny est violée.
         Sinon True.
         """
+
         for rule in self.rules:
             # Protocole
             if rule.get("protocol") and rule["protocol"].upper() != packet.protocol.upper():
@@ -40,9 +47,9 @@ class RulesEngine:
                 continue
 
             if rule["action"] == "deny":
-                return False  # ❌ paquet bloqué
+                return ruleMatched(rule=rule,is_valid=False)# ❌ paquet bloqué
 
-        return True  # ✅ rien n'a bloqué le paquet
+        return ruleMatched(rule={},is_valid=True)  # ✅ rien n'a bloqué le paquet
 
     def _match_ip(self, ip, cidr):
         try:

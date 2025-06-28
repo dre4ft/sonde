@@ -1,7 +1,13 @@
 import threading
-import json
 from scapy.all import sniff, IP, TCP, UDP
-from BD.packet_db import create_capture_session, add_packet_to_session, get_latest_session
+from BD.packet_db import (
+    create_capture_session,
+    add_packet_to_session,
+    get_latest_session,
+    get_ko_packets,
+    add_ko_packet,
+    Packet as PacketDB
+)
 from rule_engine import RulesEngine, Packet
 
 _stop_event = threading.Event()
@@ -42,21 +48,27 @@ def process_packet(pkt):
             dst_port=dport
         )
 
-        rule_matched = _rules_engine.match_packet(p)  # True si le paquet est autorisé
+        rule_matched = _rules_engine.match_packet(p)  # Objet avec is_valid, rule, etc.
 
-        # Ajoute le paquet à la session en cours
-        if _current_session_id is not None:
-            add_packet_to_session(
-                session_id=_current_session_id,
-                src_ip=ip_layer.src,
-                dst_ip=ip_layer.dst,
-                protocol=proto,
-                src_port=sport,
-                dst_port=dport,
-                raw=raw_summary,
-                rule_matched=rule_matched
-            )
-        print(f"Packet capturé: {raw_summary} | Valide: {rule_matched}")
+        # Créer et ajouter le packet à la session
+        packet_db = PacketDB(
+            src_ip=ip_layer.src,
+            dst_ip=ip_layer.dst,
+            protocol=proto,
+            src_port=sport,
+            dst_port=dport,
+            raw=raw_summary,
+            rule_matched=rule_matched.is_valid,
+            session_id=_current_session_id
+        )
+        packet_db = add_packet_to_session(packet_db)  # Ajoute et récupère l'instance avec ID
+
+        if not rule_matched.is_valid:
+            # Si le paquet est bloqué, on crée un KO_packet lié à ce packet
+            add_ko_packet(packet_db, rule_matched.rule)
+            print(f"Paquet bloqué: {raw_summary} | Règle: {rule_matched.rule}")
+        else:
+            print(f"Packet capturé: {raw_summary} | Valide: {rule_matched.is_valid}")
 
 def _sniff_thread(interface):
     sniff(iface=interface, prn=process_packet, store=0, stop_filter=lambda x: _stop_event.is_set())
@@ -95,4 +107,3 @@ def get_rules():
     global _rules_engine
     if _rules_engine is not None:
         return _rules_engine.get_rules()
-  
