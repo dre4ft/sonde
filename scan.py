@@ -153,7 +153,7 @@ def main() -> None:
     pa.add_argument("target",    help="IP ou CIDR (ex : 192.168.1.0/24)")
     pa.add_argument("-p","--ports", help="Ports Nmap (ex : 80,8080)", default=None)
     pa.add_argument("-v","--vuln",  action="store_true", help="Activer recherche CVE")
-    pa.add_argument("-a","--ai",    action="store_true", help="Activer classification IA", default=True)
+    pa.add_argument("-a","--ai", action="store_true", help="Activer classification IA")
     pa.add_argument("-d","--debug", action="store_true")
     a = pa.parse_args()
 

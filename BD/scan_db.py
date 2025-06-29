@@ -37,11 +37,11 @@ class Scan(Base):
     netbios   = Column(String)
     ports     = Column(String)
     role      = Column(String)
-    device_type = Column(String)
     services  = Column(Text)
     cves      = Column(Text)
-    ai_score  = Column(Float)  # Nouveau champ
-    ai_method = Column(String)  # Nouveau champ
+    device_type = Column(String,  nullable=True, index=True)
+    ai_score    = Column(Float,   nullable=True)
+    ai_method   = Column(String,  nullable=True)
 
     services_rel = relationship(
         "Service", back_populates="scan",
@@ -118,13 +118,15 @@ def init_db() -> None:
 def save_scan_entry(scan_type: str, hosts: List[Dict]) -> None:
     session = Session()
 
+    scan_timestamp = datetime.utcnow()
+
     for host in hosts:
         host_cves = {
             cve for svc in host.get("services", []) for cve in svc.get("cves", [])
         }
 
         scan = Scan(
-            timestamp=datetime.utcnow(),
+            timestamp=scan_timestamp,
             scan_type=scan_type,
             ip=host["ip"],
             os=host.get("os", ""),
@@ -134,7 +136,7 @@ def save_scan_entry(scan_type: str, hosts: List[Dict]) -> None:
             role=host.get("role", ""),
             services=json.dumps(host.get("services", []), ensure_ascii=False),
             cves=",".join(sorted(host_cves)),
-            device_type=host.get("device_type",""),
+            device_type=host.get("device_type"),
             ai_score=host.get("ai_score"),  # Nouveau
             ai_method=host.get("ai_method")  # Nouveau
         )

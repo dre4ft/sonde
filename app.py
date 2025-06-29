@@ -381,11 +381,33 @@ def ai_stats():
         ) 
     else: 
         latest_ts = session.query(func.max(Scan.timestamp)).scalar() 
-        base_q = base_q.filter(Scan.timestamp == latest_ts) 
+        if latest_ts:
+            # Prendre tous les scans dans une fenêtre de 60 secondes avant le timestamp max
+            from datetime import timedelta
+            time_window = latest_ts - timedelta(seconds=60)
+            base_q = base_q.filter(Scan.timestamp >= time_window)
+        else:
+            # Aucun scan trouvé
+            base_q = base_q.filter(False)
  
     scans = base_q.all()
     
-    # Calculer les stats
+    if len(scans) <= 1 and not scan_time:
+        # Récupérer tous les scans du même type que le plus récent
+        if scans:
+            latest_scan_type = scans[0].scan_type
+            # Prendre tous les scans de ce type dans les dernières heures
+            from datetime import timedelta
+            if latest_ts:
+                time_window = latest_ts - timedelta(hours=1)
+                base_q = session.query(Scan).filter(
+                    Scan.device_type.isnot(None),
+                    Scan.scan_type == latest_scan_type,
+                    Scan.timestamp >= time_window
+                )
+                scans = base_q.all()
+    
+    # Calculer les stats (le reste du code reste identique)
     type_counts = {}
     confidence_by_type = {}
     
@@ -428,7 +450,7 @@ def ai_stats():
         avg_confidence=avg_confidence,
         avg_confidence_percent=avg_confidence_percent,
         total_classified=sum(type_counts.values()),
-                global_avg=global_avg
+        global_avg=global_avg
     )
 
 @app.route("/report")
