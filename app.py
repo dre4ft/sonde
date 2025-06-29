@@ -413,6 +413,12 @@ def ai_stats():
     
     # Convertir les valeurs de confiance en pourcentages pour le template
     avg_confidence_percent = [v * 100 for v in avg_confidence.values()]
+
+    global_avg = round(
+        (sum(avg_confidence.values()) / len(avg_confidence) * 100) 
+        if avg_confidence else 0, 
+        1 
+    )
     
     session.close()
     
@@ -421,7 +427,8 @@ def ai_stats():
         type_counts=type_counts,
         avg_confidence=avg_confidence,
         avg_confidence_percent=avg_confidence_percent,
-        total_classified=sum(type_counts.values())
+        total_classified=sum(type_counts.values()),
+                global_avg=global_avg
     )
 
 @app.route("/report")
